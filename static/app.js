@@ -343,7 +343,7 @@
   function fillMonthSelect(selectId, selected) {
     var sel = $(selectId);
     sel.innerHTML = "";
-    var end = shiftMonth(currentMonthKey(), 1);
+    var end = "2026-12";
     var cursor = "2026-01";
     var guard = 0;
     while (guard < 48) {
