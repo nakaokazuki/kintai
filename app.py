@@ -633,31 +633,34 @@ def admin_dashboard():
     year, month = parse_month_key(ym)
     today = today_tokyo()
     day_param = (request.args.get("date") or "").strip()
-    try:
-        target_day = date.fromisoformat(day_param) if day_param else today
-    except ValueError:
-        target_day = today
-    # 対象月内・未来日は当日（または月末）に丸める
-    days_in_month = calendar.monthrange(year, month)[1]
-    if target_day.year != year or target_day.month != month:
-        target_day = min(today, date(year, month, days_in_month))
-        if target_day.year != year or target_day.month != month:
-            target_day = date(year, month, 1)
-    if target_day > today:
-        target_day = today
+    use_day = bool(day_param)
+    target_day = None
+    if use_day:
+        try:
+            target_day = date.fromisoformat(day_param)
+        except ValueError:
+            use_day = False
+            target_day = None
+        if use_day:
+            days_in_month = calendar.monthrange(year, month)[1]
+            if target_day.year != year or target_day.month != month:
+                use_day = False
+                target_day = None
+            elif target_day > today:
+                target_day = today
 
     employees = db.fetchall("SELECT emp_no, name FROM employees WHERE active=1 ORDER BY emp_no")
     unsubmitted_list: list[dict] = []
     pending_list: list[dict] = []
     missing_list: list[dict] = []
     break_list: list[dict] = []
-    wd = target_day.isoformat()
+    missing_value = 0
+    break_value = 0
     from logic import is_business_day
 
     def emp_label(emp) -> dict:
         return {"emp_no": emp["emp_no"], "name": emp["name"]}
 
-    # 提出状況は別接続で先に取得（長時間の接続保持中に書かない）
     for emp in employees:
         sub = get_or_create_submission(emp["emp_no"], ym)
         if sub["status"] == "未提出":
@@ -665,24 +668,43 @@ def admin_dashboard():
         elif sub["status"] == "提出済み":
             pending_list.append(emp_label(emp))
 
-    with db.get_conn() as conn:
+    if use_day and target_day is not None:
+        wd = target_day.isoformat()
+        with db.get_conn() as conn:
+            for emp in employees:
+                info = recalc_day(conn, emp["emp_no"], wd)
+                if is_business_day(target_day) and info["status_kind"] == "missing":
+                    missing_list.append(emp_label(emp))
+                if info["break_short"]:
+                    break_list.append(emp_label(emp))
+            conn.commit()
+        missing_value = len(missing_list)
+        break_value = len(break_list)
+        scope = "day"
+        date_out = wd
+    else:
+        # 対象日未選択: 月の未入力日数・休憩不足日数の合計
         for emp in employees:
-            info = recalc_day(conn, emp["emp_no"], wd)
-            if is_business_day(target_day) and info["status_kind"] == "missing":
+            missing, br, _ = missing_and_break_counts(emp["emp_no"], year, month)
+            if missing > 0:
                 missing_list.append(emp_label(emp))
-            if info["break_short"]:
+                missing_value += missing
+            if br > 0:
                 break_list.append(emp_label(emp))
-        conn.commit()
+                break_value += br
+        scope = "month"
+        date_out = ""
 
     return json_ok(
         {
             "month": ym,
-            "date": wd,
+            "date": date_out,
+            "scope": scope,
             "kpi": {
                 "unsubmitted": len(unsubmitted_list),
                 "pending": len(pending_list),
-                "missing": len(missing_list),
-                "break_short": len(break_list),
+                "missing": missing_value,
+                "break_short": break_value,
             },
             "lists": {
                 "unsubmitted": unsubmitted_list,

@@ -5,8 +5,9 @@
     today: null,
     empMonth: null,
     adminMonth: null,
-    adminDay: null,
+    adminDay: "",
     dashboardLists: null,
+    dashboardScope: "month",
     detailEmp: null,
     pendingAdminScreen: null
   };
@@ -308,6 +309,11 @@
   function fillDaySelect(ym, selectedIso) {
     var sel = $("a01-day");
     sel.innerHTML = "";
+    var none = document.createElement("option");
+    none.value = "";
+    none.textContent = "選択なし（月合計）";
+    sel.appendChild(none);
+
     var parts = ym.split("-");
     var y = parseInt(parts[0], 10);
     var m = parseInt(parts[1], 10);
@@ -319,29 +325,28 @@
       pad(today.getMonth() + 1) +
       "-" +
       pad(today.getDate());
-    var pick = selectedIso;
-    if (!pick || pick.slice(0, 7) !== ym) {
-      pick = todayIso.slice(0, 7) === ym ? todayIso : ym + "-" + pad(Math.min(last, today.getDate()));
-      if (todayIso.slice(0, 7) !== ym) {
-        pick = ym + "-" + pad(last);
-      }
+    var pick = selectedIso === null || selectedIso === undefined ? "" : selectedIso;
+    if (pick && pick.slice(0, 7) !== ym) {
+      pick = "";
     }
     for (var d = 1; d <= last; d++) {
       var iso = ym + "-" + pad(d);
+      if (iso > todayIso) continue;
       var opt = document.createElement("option");
       opt.value = iso;
       opt.textContent = formatDisplayDate(iso);
       if (iso === pick) opt.selected = true;
       sel.appendChild(opt);
     }
-    if (!sel.value && sel.options.length) {
-      sel.selectedIndex = 0;
+    if (!pick) {
+      none.selected = true;
     }
     state.adminDay = sel.value;
   }
 
   async function refreshDashboard() {
     if (!state.adminMonth) state.adminMonth = defaultMonthKey();
+    if (state.adminDay === undefined) state.adminDay = "";
     fillMonthSelect("a01-month", state.adminMonth);
     fillDaySelect(state.adminMonth, state.adminDay);
     var data = await api(
@@ -350,17 +355,17 @@
         "&date=" +
         encodeURIComponent(state.adminDay || "")
     );
-    if (data.date) {
-      state.adminDay = data.date;
-      if ($("a01-day").value !== data.date) {
-        fillDaySelect(state.adminMonth, data.date);
-      }
+    state.adminDay = data.date || "";
+    state.dashboardScope = data.scope || "month";
+    if ($("a01-day").value !== state.adminDay) {
+      fillDaySelect(state.adminMonth, state.adminDay);
     }
     state.dashboardLists = data.lists || {};
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
-    $("kpi-missing").textContent = data.kpi.missing + "人";
-    $("kpi-break").textContent = data.kpi.break_short + "人";
+    var dayUnit = state.dashboardScope === "day" ? "人" : "件";
+    $("kpi-missing").textContent = data.kpi.missing + dayUnit;
+    $("kpi-break").textContent = data.kpi.break_short + dayUnit;
   }
 
   var KPI_TITLES = {
@@ -377,7 +382,11 @@
     var rows = (state.dashboardLists && state.dashboardLists[kind]) || [];
     var label = KPI_TITLES[kind] || kind;
     if (kind === "missing" || kind === "break_short") {
-      label += "（" + formatDisplayDate(state.adminDay) + "）";
+      if (state.adminDay) {
+        label += "（" + formatDisplayDate(state.adminDay) + "）";
+      } else {
+        label += "（" + monthLabel(state.adminMonth) + "・月合計）";
+      }
     } else {
       label += "（" + monthLabel(state.adminMonth) + "）";
     }
@@ -839,7 +848,7 @@
 
   $("a01-month").addEventListener("change", function () {
     state.adminMonth = $("a01-month").value;
-    state.adminDay = null;
+    state.adminDay = "";
     $("a01-kpi-detail").classList.add("is-hidden");
     withError(refreshDashboard)();
   });
