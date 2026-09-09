@@ -22,11 +22,8 @@
     return d.getFullYear() + "-" + pad(d.getMonth() + 1);
   }
 
-  /** 標準デモデータ（2026年4月）を最初に表示 */
-  var DEMO_MONTH = "2026-04";
-
   function defaultMonthKey() {
-    return DEMO_MONTH;
+    return currentMonthKey();
   }
 
   function shiftMonth(ym, delta) {
@@ -149,9 +146,7 @@
       br.className = "btn btn-punch btn-secondary";
     }
 
-    var missing = $("alert-missing");
     var breakAlert = $("alert-break");
-    missing.classList.toggle("is-hidden", !(today.clock_in && !today.clock_out));
     if (today.break_short) {
       breakAlert.classList.remove("is-hidden");
       breakAlert.textContent =
@@ -236,7 +231,7 @@
     var data = await api("/api/admin/dashboard?month=" + state.adminMonth);
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
-    $("kpi-review").textContent = data.kpi.review + "件";
+    $("kpi-missing").textContent = data.kpi.missing + "人";
     $("kpi-break").textContent = data.kpi.break_short + "件";
   }
 
@@ -308,8 +303,7 @@
     body.innerHTML = "";
     data.rows.forEach(function (r) {
       var tr = document.createElement("tr");
-      var day = r.created_at.replace("T", " ").slice(0, 10).replace(/-/g, "/");
-      day = day.replace(/\/0/g, "/").replace(/^0/, "");
+      var day = r.display_date || r.created_at;
       tr.innerHTML =
         "<td>" +
         day +

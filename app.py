@@ -158,6 +158,39 @@ def add_log(
         db.execute(sql, args)
 
 
+def format_log_date(iso: str) -> str:
+    """変更履歴の日付表示（例: 2026/9/9）。"""
+    day = (iso or "").replace("T", " ")[:10].replace("-", "/")
+    parts = day.split("/")
+    if len(parts) != 3:
+        return day
+    try:
+        return f"{int(parts[0])}/{int(parts[1])}/{int(parts[2])}"
+    except ValueError:
+        return day
+
+
+def log_date_matches(created_at: str, query: str) -> bool:
+    """画面表記（2026/9/9）や 2026-09-09 などで検索できるようにする。"""
+    q = (query or "").strip()
+    if not q:
+        return True
+    display = format_log_date(created_at)
+    if q in display or q in (created_at or ""):
+        return True
+    # 2026-09-09 / 2026/09/09 → 2026/9/9 に正規化して部分一致
+    normalized = q.replace("-", "/").replace(".", "/")
+    pieces = normalized.split("/")
+    try:
+        norm_parts = [str(int(p)) if p.isdigit() else p for p in pieces if p != ""]
+    except ValueError:
+        return False
+    if not norm_parts:
+        return False
+    q_norm = "/".join(norm_parts)
+    return q_norm in display
+
+
 def get_or_create_submission(emp_no: str, ym: str) -> dict:
     row = db.fetchone(
         "SELECT * FROM monthly_submissions WHERE emp_no=? AND year_month=?",
@@ -298,7 +331,6 @@ def employee_punch(emp):
                 "UPDATE attendance_days SET clock_in=? WHERE emp_no=? AND work_date=?",
                 (hhmm, emp["emp_no"], today),
             )
-            add_log(emp["emp_no"], emp["emp_no"], today, "出勤", "", hhmm, "打刻", conn=conn)
         elif action == "clock_out":
             if not row["clock_in"]:
                 return json_err("先に出勤してください")
@@ -314,7 +346,6 @@ def employee_punch(emp):
                    WHERE emp_no=? AND work_date=?""",
                 (hhmm, br, emp["emp_no"], today),
             )
-            add_log(emp["emp_no"], emp["emp_no"], today, "退勤", "", hhmm, "打刻", conn=conn)
         elif action == "break_start":
             if not row["clock_in"] or row["clock_out"]:
                 return json_err("出勤中のみ休憩できます")
@@ -325,7 +356,6 @@ def employee_punch(emp):
                    WHERE emp_no=? AND work_date=?""",
                 (now.isoformat(timespec="seconds"), emp["emp_no"], today),
             )
-            add_log(emp["emp_no"], emp["emp_no"], today, "休憩開始", "", hhmm, "打刻", conn=conn)
         elif action == "break_end":
             if not row["on_break"] or not row["break_started_at"]:
                 return json_err("休憩中ではありません")
@@ -337,16 +367,6 @@ def employee_punch(emp):
                    SET on_break=0, break_started_at=NULL, break_minutes=?
                    WHERE emp_no=? AND work_date=?""",
                 (br, emp["emp_no"], today),
-            )
-            add_log(
-                emp["emp_no"],
-                emp["emp_no"],
-                today,
-                "休憩終了",
-                str(row["break_minutes"]),
-                str(br),
-                "打刻",
-                conn=conn,
             )
         else:
             return json_err("不明な操作です")
@@ -492,7 +512,7 @@ def admin_dashboard():
     employees = db.fetchall("SELECT emp_no, name FROM employees WHERE active=1 ORDER BY emp_no")
     unsubmitted = 0
     pending = 0
-    review = 0
+    missing_people = 0
     break_total = 0
     for emp in employees:
         sub = get_or_create_submission(emp["emp_no"], ym)
@@ -502,15 +522,15 @@ def admin_dashboard():
             pending += 1
         missing, br, _ = missing_and_break_counts(emp["emp_no"], year, month)
         break_total += br
-        if missing > 0 or br > 0:
-            review += 1
+        if missing > 0:
+            missing_people += 1
     return json_ok(
         {
             "month": ym,
             "kpi": {
                 "unsubmitted": unsubmitted,
                 "pending": pending,
-                "review": review,
+                "missing": missing_people,
                 "break_short": break_total,
             },
         }
@@ -711,10 +731,13 @@ def admin_logs():
     )
     out = []
     for r in rows:
+        # 通常打刻は変更履歴に含めない（後からの修正・承認・差戻しのみ）
+        if (r["reason"] or "") == "打刻":
+            continue
         emp = db.fetchone("SELECT name FROM employees WHERE emp_no=?", (r["emp_no"],))
         name = emp["name"] if emp else r["emp_no"]
         created = r["created_at"]
-        if q_date and q_date not in created:
+        if not log_date_matches(created, q_date):
             continue
         if q_emp and q_emp not in r["emp_no"] and q_emp not in name:
             continue
@@ -723,6 +746,7 @@ def admin_logs():
         out.append(
             {
                 "created_at": created,
+                "display_date": format_log_date(created),
                 "changer": r["changer"],
                 "employee": f"{name}（{r['emp_no']}）",
                 "field_name": r["field_name"],

@@ -41,7 +41,6 @@
           </div>
         </div>
 
-        <div id="alert-missing" class="alert alert-warn is-hidden">⚠ 未入力：退勤未</div>
         <div id="alert-break" class="alert alert-danger is-hidden">⚠ 休憩不足：必要60分／実績40分／不足20分</div>
       </div>
     </section>
@@ -76,6 +75,9 @@
       <div class="phone phone-wide">
         <div class="app-header">
           <h1>管理者ダッシュボード</h1>
+          <div class="header-links">
+            <button type="button" class="linkish" data-goto="e01">打刻</button>
+          </div>
         </div>
         <div class="month-row">
           <label class="field-label" for="a01-month">対象月</label>
@@ -84,7 +86,7 @@
         <div class="kpi-grid">
           <div class="kpi"><span class="kpi-label">未提出</span><span class="kpi-value" id="kpi-unsubmitted">—</span></div>
           <div class="kpi"><span class="kpi-label">承認待ち</span><span class="kpi-value" id="kpi-pending">—</span></div>
-          <div class="kpi"><span class="kpi-label">要確認</span><span class="kpi-value" id="kpi-review">—</span></div>
+          <div class="kpi"><span class="kpi-label">未入力</span><span class="kpi-value" id="kpi-missing">—</span></div>
           <div class="kpi kpi-alert"><span class="kpi-label">休憩不足</span><span class="kpi-value" id="kpi-break">—</span></div>
         </div>
         <div class="action-row action-row-full">
@@ -157,7 +159,7 @@
         </div>
 
         <div class="a04-search-row">
-          <input id="a04-date" class="input" type="search" placeholder="日時" />
+          <input id="a04-date" class="input" type="search" placeholder="日付（例: 2026/9/9）" />
           <input id="a04-emp" class="input" type="search" placeholder="社員" />
           <input id="a04-changer" class="input" type="search" placeholder="変更者" />
         </div>
