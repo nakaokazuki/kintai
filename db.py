@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -23,6 +24,9 @@ if _DATABASE_URL.startswith("postgres://"):
     _DATABASE_URL = "postgresql://" + _DATABASE_URL[len("postgres://") :]
 
 USE_POSTGRES = bool(_DATABASE_URL)
+
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
 
 
 def _qmark_to_percent(sql: str) -> str:
@@ -42,10 +46,11 @@ class _PgCursor:
 
 
 class PgConnection:
-    """sqlite3.Connection に近いインターフェース。"""
+    """sqlite3.Connection に近いインターフェース（接続はプールへ返却）。"""
 
-    def __init__(self, conn):
+    def __init__(self, conn, *, pooled: bool = False):
         self._conn = conn
+        self._pooled = pooled
 
     def execute(self, sql: str, args: tuple = ()):
         cur = self._conn.cursor()
@@ -68,27 +73,64 @@ class PgConnection:
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        if self._pooled:
+            _return_pg_conn(self._conn)
+        else:
+            self._conn.close()
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        if exc_type is None:
-            self._conn.commit()
-        else:
-            self._conn.rollback()
-        self._conn.close()
+        try:
+            if exc_type is None:
+                self._conn.commit()
+            else:
+                self._conn.rollback()
+        finally:
+            self.close()
         return False
+
+
+def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is not None:
+        return _pg_pool
+    with _pg_pool_lock:
+        if _pg_pool is not None:
+            return _pg_pool
+        import psycopg2
+        from psycopg2 import pool
+        from psycopg2.extras import RealDictCursor
+
+        _pg_pool = pool.ThreadedConnectionPool(
+            1,
+            5,
+            _DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            connect_timeout=10,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5,
+        )
+        return _pg_pool
+
+
+def _return_pg_conn(conn) -> None:
+    try:
+        _get_pg_pool().putconn(conn)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def get_conn() -> Union[sqlite3.Connection, PgConnection]:
     if USE_POSTGRES:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-
-        raw = psycopg2.connect(_DATABASE_URL, cursor_factory=RealDictCursor)
-        return PgConnection(raw)
+        raw = _get_pg_pool().getconn()
+        return PgConnection(raw, pooled=True)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(

@@ -9,7 +9,8 @@
     dashboardLists: null,
     dashboardScope: "month",
     detailEmp: null,
-    pendingAdminScreen: null
+    pendingAdminScreen: null,
+    empBusy: false
   };
 
   function $(id) {
@@ -123,6 +124,7 @@
   }
 
   function syncEmployeeLoginFromInput() {
+    if (state.empBusy) return;
     var empId = ($("emp-id").value || "").trim();
     if (!empId) {
       if (state.emp) {
@@ -233,10 +235,15 @@
       setEmployeeNavEnabled(false);
       return;
     }
+    var emp = state.emp;
     var data = await api("/api/employee/today");
+    // 通信中に入力変更でログアウトされた場合は中断
+    if (!state.emp || !emp || state.emp.emp_no !== emp.emp_no) {
+      return;
+    }
     state.today = data.today;
     $("e01-identity").textContent =
-      "氏名：" + state.emp.name + "　番号：" + state.emp.emp_no;
+      "氏名：" + (emp.name || "—") + "　番号：" + (emp.emp_no || "—");
     $("e01-today-title").textContent = "本日 " + formatDisplayDate(data.server_date);
     updatePunchButtons(data.today);
     setEmployeeNavEnabled(true);
@@ -705,16 +712,30 @@
         alert("社員番号を入力してください");
         return;
       }
-      var data = await api("/api/employee/login", {
-        method: "POST",
-        body: JSON.stringify({ emp_no: emp_no })
-      });
-      state.role = "employee";
-      state.emp = data;
-      state.empMonth = defaultMonthKey();
-      setSessionLabel();
-      setEmployeeNavEnabled(true);
-      await refreshToday();
+      state.empBusy = true;
+      try {
+        var data = await api("/api/employee/login", {
+          method: "POST",
+          body: JSON.stringify({ emp_no: emp_no })
+        });
+        if (!data || !data.emp_no) {
+          throw new Error("ログインに失敗しました");
+        }
+        state.role = "employee";
+        state.emp = {
+          emp_no: data.emp_no,
+          name: data.name || ""
+        };
+        state.empMonth = defaultMonthKey();
+        $("emp-id").value = data.emp_no;
+        $("e01-identity").textContent =
+          "氏名：" + (data.name || "—") + "　番号：" + data.emp_no;
+        setSessionLabel();
+        setEmployeeNavEnabled(true);
+        await refreshToday();
+      } finally {
+        state.empBusy = false;
+      }
     })
   );
 
@@ -756,6 +777,11 @@
     })
   );
 
+  function nowHhmm() {
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
   document.querySelectorAll("[data-action]").forEach(function (el) {
     el.addEventListener(
       "click",
@@ -773,23 +799,73 @@
               ? "clock_out"
               : null;
           if (!punch) return;
-          var data = await api("/api/employee/punch", {
-            method: "POST",
-            body: JSON.stringify({ action: punch })
-          });
-          state.today = data.today;
-          updatePunchButtons(data.today);
+          var prev = {
+            clock_in: today.clock_in || "",
+            clock_out: today.clock_out || "",
+            break_minutes: today.break_minutes || 0,
+            on_break: !!today.on_break,
+            break_short: !!today.break_short,
+            required_break: today.required_break || 0,
+            shortage: today.shortage || 0,
+            overtime_minutes: today.overtime_minutes || 0,
+            status: today.status || "",
+            status_kind: today.status_kind || ""
+          };
+          var optimistic = Object.assign({}, prev);
+          if (punch === "clock_in") optimistic.clock_in = nowHhmm();
+          if (punch === "clock_out") {
+            optimistic.clock_out = nowHhmm();
+            optimistic.on_break = false;
+          }
+          state.today = optimistic;
+          updatePunchButtons(optimistic);
+          $("btn-work").disabled = true;
+          try {
+            var data = await api("/api/employee/punch", {
+              method: "POST",
+              body: JSON.stringify({ action: punch })
+            });
+            state.today = data.today;
+            updatePunchButtons(data.today);
+          } catch (err) {
+            state.today = prev;
+            updatePunchButtons(prev);
+            throw err;
+          }
         }
         if (action === "break") {
           if (!isEmployeeActive()) return;
           var t = state.today || {};
           var b = t.on_break ? "break_end" : "break_start";
-          var bd = await api("/api/employee/punch", {
-            method: "POST",
-            body: JSON.stringify({ action: b })
-          });
-          state.today = bd.today;
-          updatePunchButtons(bd.today);
+          var prevBreak = {
+            clock_in: t.clock_in || "",
+            clock_out: t.clock_out || "",
+            break_minutes: t.break_minutes || 0,
+            on_break: !!t.on_break,
+            break_short: !!t.break_short,
+            required_break: t.required_break || 0,
+            shortage: t.shortage || 0,
+            overtime_minutes: t.overtime_minutes || 0,
+            status: t.status || "",
+            status_kind: t.status_kind || ""
+          };
+          var optBreak = Object.assign({}, prevBreak);
+          optBreak.on_break = b === "break_start";
+          state.today = optBreak;
+          updatePunchButtons(optBreak);
+          $("btn-break").disabled = true;
+          try {
+            var bd = await api("/api/employee/punch", {
+              method: "POST",
+              body: JSON.stringify({ action: b })
+            });
+            state.today = bd.today;
+            updatePunchButtons(bd.today);
+          } catch (err2) {
+            state.today = prevBreak;
+            updatePunchButtons(prevBreak);
+            throw err2;
+          }
         }
         if (action === "submit") openSubmitModal();
         if (action === "close-modal") closeSubmitModal();
@@ -980,14 +1056,25 @@
   withError(async function () {
     try {
       var me = await api("/api/employee/me");
-      state.role = "employee";
-      state.emp = me;
-      state.empMonth = defaultMonthKey();
-      $("emp-id").value = me.emp_no;
-      setSessionLabel();
-      setEmployeeNavEnabled(true);
-      await refreshToday();
-      return;
+      if (!me || !me.emp_no) {
+        resetEmployeeUi();
+      } else {
+        state.empBusy = true;
+        try {
+          state.role = "employee";
+          state.emp = { emp_no: me.emp_no, name: me.name || "" };
+          state.empMonth = defaultMonthKey();
+          $("emp-id").value = me.emp_no;
+          $("e01-identity").textContent =
+            "氏名：" + (me.name || "—") + "　番号：" + me.emp_no;
+          setSessionLabel();
+          setEmployeeNavEnabled(true);
+          await refreshToday();
+        } finally {
+          state.empBusy = false;
+        }
+        return;
+      }
     } catch (e) {
       resetEmployeeUi();
     }
