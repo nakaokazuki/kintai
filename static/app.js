@@ -256,14 +256,26 @@
       return;
     }
     if (!state.empMonth) state.empMonth = defaultMonthKey();
-    var data = await api("/api/employee/month?month=" + state.empMonth);
+    var body = $("e02-body");
+    body.innerHTML = "<tr><td colspan=\"6\">読み込み中…</td></tr>";
+    try {
+      var data = await api("/api/employee/month?month=" + state.empMonth);
+    } catch (err) {
+      body.innerHTML =
+        "<tr><td colspan=\"6\">読み込みに失敗しました。もう一度開いてください。</td></tr>";
+      throw err;
+    }
     $("e02-title").textContent = monthLabel(state.empMonth) + "の月次一覧";
     $("e02-status").textContent = data.submission.status;
     var editable =
       data.submission.status === "未提出" || data.submission.status === "差戻し";
     $("e02-edit-block").classList.toggle("is-hidden", !editable);
-    var body = $("e02-body");
     body.innerHTML = "";
+    if (!data.days || data.days.length === 0) {
+      body.innerHTML =
+        "<tr><td colspan=\"6\">表示できる日がありません（未来月は空です）</td></tr>";
+      return;
+    }
     data.days.forEach(function (d) {
       var tr = document.createElement("tr");
       if (d.status_kind === "missing") tr.className = "row-missing";
@@ -782,6 +794,36 @@
     return pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
+  var punchSaving = false;
+
+  function showPunchSaving(message) {
+    punchSaving = true;
+    $("punch-modal-title").textContent = "記録中";
+    $("punch-modal-msg").textContent =
+      message || "サーバに保存しています。完了するまでタブを閉じないでください。";
+    $("punch-modal").classList.remove("is-hidden");
+  }
+
+  function hidePunchSaving(okMessage) {
+    if (okMessage) {
+      $("punch-modal-title").textContent = "記録完了";
+      $("punch-modal-msg").textContent = okMessage;
+      setTimeout(function () {
+        $("punch-modal").classList.add("is-hidden");
+        punchSaving = false;
+      }, 600);
+      return;
+    }
+    $("punch-modal").classList.add("is-hidden");
+    punchSaving = false;
+  }
+
+  window.addEventListener("beforeunload", function (e) {
+    if (!punchSaving) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
+
   document.querySelectorAll("[data-action]").forEach(function (el) {
     el.addEventListener(
       "click",
@@ -820,6 +862,11 @@
           state.today = optimistic;
           updatePunchButtons(optimistic);
           $("btn-work").disabled = true;
+          showPunchSaving(
+            punch === "clock_in"
+              ? "出勤を記録しています。完了するまでタブを閉じないでください。"
+              : "退勤を記録しています。完了するまでタブを閉じないでください。"
+          );
           try {
             var data = await api("/api/employee/punch", {
               method: "POST",
@@ -827,9 +874,13 @@
             });
             state.today = data.today;
             updatePunchButtons(data.today);
+            hidePunchSaving(
+              punch === "clock_in" ? "出勤を記録しました。" : "退勤を記録しました。"
+            );
           } catch (err) {
             state.today = prev;
             updatePunchButtons(prev);
+            hidePunchSaving();
             throw err;
           }
         }
@@ -854,6 +905,11 @@
           state.today = optBreak;
           updatePunchButtons(optBreak);
           $("btn-break").disabled = true;
+          showPunchSaving(
+            b === "break_start"
+              ? "休憩開始を記録しています。完了するまでタブを閉じないでください。"
+              : "休憩終了を記録しています。完了するまでタブを閉じないでください。"
+          );
           try {
             var bd = await api("/api/employee/punch", {
               method: "POST",
@@ -861,9 +917,13 @@
             });
             state.today = bd.today;
             updatePunchButtons(bd.today);
+            hidePunchSaving(
+              b === "break_start" ? "休憩開始を記録しました。" : "休憩終了を記録しました。"
+            );
           } catch (err2) {
             state.today = prevBreak;
             updatePunchButtons(prevBreak);
+            hidePunchSaving();
             throw err2;
           }
         }
