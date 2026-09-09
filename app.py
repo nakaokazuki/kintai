@@ -107,6 +107,7 @@ def recalc_day(conn, emp_no: str, work_date: str) -> dict:
     cin = parse_hhmm(row["clock_in"])
     cout = parse_hhmm(row["clock_out"])
     br = int(row["break_minutes"] or 0)
+    force_work = bool(row["force_work"]) if "force_work" in row.keys() else False
     ot = overtime_minutes(cout)
     conn.execute(
         "UPDATE attendance_days SET overtime_minutes=? WHERE emp_no=? AND work_date=?",
@@ -120,6 +121,7 @@ def recalc_day(conn, emp_no: str, work_date: str) -> dict:
         "clock_out": row["clock_out"] or "",
         "break_minutes": br,
         "on_break": bool(row["on_break"]),
+        "force_work": force_work,
         "overtime_minutes": ot,
         "work_minutes": work,
         "required_break": required,
@@ -221,6 +223,8 @@ def apply_day_edits(
     reason: str,
 ) -> Optional[str]:
     """日次勤怠を一括更新し変更履歴を残す。エラー時はメッセージ文字列を返す。"""
+    from logic import is_business_day
+
     for item in days:
         wd = item.get("work_date")
         row = ensure_day(conn, emp_no, wd)
@@ -235,6 +239,22 @@ def apply_day_edits(
         if new_out and not parse_hhmm(new_out):
             return f"{wd} の退勤時刻が不正です"
 
+        # 土日祝: 手動で「未入力」にすると force_work=1（時刻入力可）
+        day_mode = (item.get("day_mode") or "").strip()
+        d = date.fromisoformat(wd)
+        old_force = bool(row["force_work"]) if "force_work" in row.keys() else False
+        if not is_business_day(d):
+            if day_mode == "holiday":
+                new_force = 0
+                new_in = None
+                new_out = None
+                new_br = 0
+            else:
+                # 未入力（勤務）または時刻あり
+                new_force = 1 if day_mode == "work" or new_in or new_out else 0
+        else:
+            new_force = 0
+
         for field, old, new in (
             ("出勤", row["clock_in"], new_in),
             ("退勤", row["clock_out"], new_out),
@@ -244,14 +264,25 @@ def apply_day_edits(
             new_s = "" if new is None else str(new)
             if old_s != new_s:
                 add_log(changer, emp_no, wd, field, old_s, new_s, reason, conn=conn)
+        if old_force != bool(new_force):
+            add_log(
+                changer,
+                emp_no,
+                wd,
+                "勤務区分",
+                "出勤日" if old_force else "休日",
+                "出勤日" if new_force else "休日",
+                reason,
+                conn=conn,
+            )
 
         ot = overtime_minutes(parse_hhmm(new_out))
         conn.execute(
             """UPDATE attendance_days
                SET clock_in=?, clock_out=?, break_minutes=?, overtime_minutes=?,
-                   on_break=0, break_started_at=NULL
+                   on_break=0, break_started_at=NULL, force_work=?
                WHERE emp_no=? AND work_date=?""",
-            (new_in, new_out, new_br, ot, emp_no, wd),
+            (new_in, new_out, new_br, ot, new_force, emp_no, wd),
         )
     return None
 
@@ -273,9 +304,15 @@ def month_days_payload(emp_no: str, year: int, month: int) -> list:
             info["weekday"] = WEEKDAYS[d.weekday()]
             info["is_weekend"] = d.weekday() >= 5
             info["is_holiday"] = not is_business_day(d)
-            if info["is_holiday"]:
+            # 土日祝は既定で休日。手動で未入力（勤務）にした日・打刻がある日は通常判定
+            if info["is_holiday"] and not info["force_work"] and not info["clock_in"] and not info["clock_out"]:
                 info["status"] = "休日"
                 info["status_kind"] = "holiday"
+                info["day_mode"] = "holiday"
+            elif info["is_holiday"]:
+                info["day_mode"] = "work"
+            else:
+                info["day_mode"] = "work"
             result.append(info)
         conn.commit()
     return result

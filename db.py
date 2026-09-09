@@ -51,6 +51,7 @@ def init_db(*, skip_auto_seed: bool = False) -> None:
               on_break INTEGER NOT NULL DEFAULT 0,
               break_started_at TEXT,
               overtime_minutes INTEGER NOT NULL DEFAULT 0,
+              force_work INTEGER NOT NULL DEFAULT 0,
               UNIQUE(emp_no, work_date),
               FOREIGN KEY(emp_no) REFERENCES employees(emp_no)
             );
@@ -80,6 +81,15 @@ def init_db(*, skip_auto_seed: bool = False) -> None:
             );
             """
         )
+        cols = [
+            r[1] for r in conn.execute("PRAGMA table_info(attendance_days)").fetchall()
+        ]
+        if "force_work" not in cols:
+            conn.execute(
+                "ALTER TABLE attendance_days ADD COLUMN force_work INTEGER NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+
         admin = conn.execute("SELECT password FROM admin_settings WHERE id=1").fetchone()
         if not admin:
             from logic import now_tokyo

@@ -210,6 +210,7 @@
       if (d.status_kind === "break") tr.className = "row-break";
       if (d.status_kind === "holiday") tr.className = "row-holiday";
       tr.dataset.workDate = d.work_date;
+      tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusText =
         d.status === "休憩不足"
           ? "休不足"
@@ -217,19 +218,41 @@
             ? "休日"
             : d.status;
       if (editable) {
+        var statusCell;
+        if (d.is_holiday) {
+          var mode = d.day_mode === "work" ? "work" : "holiday";
+          statusCell =
+            '<select class="input e02-mode">' +
+            '<option value="holiday"' +
+            (mode === "holiday" ? " selected" : "") +
+            ">休日</option>" +
+            '<option value="work"' +
+            (mode === "work" ? " selected" : "") +
+            ">未入力</option>" +
+            "</select>";
+        } else {
+          statusCell = statusText;
+        }
+        var timeDisabled = d.is_holiday && d.day_mode !== "work";
         tr.innerHTML =
           "<td>" +
           d.day +
           '</td><td><input class="a03-cell e02-in" value="' +
           (d.clock_in || "") +
-          '" placeholder="—" /></td><td><input class="a03-cell e02-out" value="' +
+          '" placeholder="—" ' +
+          (timeDisabled ? "disabled " : "") +
+          '/></td><td><input class="a03-cell e02-out" value="' +
           (d.clock_out || "") +
-          '" placeholder="—" /></td><td><input class="a03-cell e02-br" value="' +
+          '" placeholder="—" ' +
+          (timeDisabled ? "disabled " : "") +
+          '/></td><td><input class="a03-cell e02-br" value="' +
           (d.clock_in || d.clock_out ? d.break_minutes : "") +
-          '" placeholder="—" /></td><td>' +
+          '" placeholder="—" ' +
+          (timeDisabled ? "disabled " : "") +
+          "/></td><td>" +
           (d.clock_out ? d.overtime_minutes : "—") +
           "</td><td>" +
-          statusText +
+          statusCell +
           "</td>";
       } else {
         tr.innerHTML =
@@ -248,6 +271,19 @@
           "</td>";
       }
       body.appendChild(tr);
+      if (editable && d.is_holiday) {
+        var modeSel = tr.querySelector(".e02-mode");
+        modeSel.addEventListener("change", function () {
+          var disable = modeSel.value === "holiday";
+          tr.classList.toggle("row-holiday", disable);
+          tr.classList.toggle("row-missing", !disable);
+          ["e02-in", "e02-out", "e02-br"].forEach(function (cls) {
+            var inp = tr.querySelector("." + cls);
+            inp.disabled = disable;
+            if (disable) inp.value = "";
+          });
+        });
+      }
     });
   }
 
@@ -397,6 +433,7 @@
       if (d.status_kind === "break") tr.className = "is-break-row";
       if (d.status_kind === "holiday") tr.className = "is-holiday-row";
       tr.dataset.workDate = d.work_date;
+      tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusClass =
         d.status_kind === "ok"
           ? "is-ok"
@@ -407,6 +444,27 @@
               : "is-missing";
       var md = d.work_date.slice(5).replace("-", "/");
       if (md.charAt(0) === "0") md = md.slice(1);
+      var statusCell;
+      if (d.is_holiday) {
+        var mode = d.day_mode === "work" ? "work" : "holiday";
+        statusCell =
+          '<select class="input a03-mode">' +
+          '<option value="holiday"' +
+          (mode === "holiday" ? " selected" : "") +
+          ">休日</option>" +
+          '<option value="work"' +
+          (mode === "work" ? " selected" : "") +
+          ">未入力</option>" +
+          "</select>";
+      } else {
+        statusCell =
+          '<span class="a03-status ' +
+          statusClass +
+          '">' +
+          d.status +
+          "</span>";
+      }
+      var timeDisabled = d.is_holiday && d.day_mode !== "work";
       tr.innerHTML =
         "<td>" +
         md +
@@ -414,16 +472,33 @@
         d.weekday +
         '</td><td><input class="a03-cell a03-in" value="' +
         (d.clock_in || "") +
-        '" placeholder="—" /></td><td><input class="a03-cell a03-out" value="' +
+        '" placeholder="—" ' +
+        (timeDisabled ? "disabled " : "") +
+        '/></td><td><input class="a03-cell a03-out" value="' +
         (d.clock_out || "") +
-        '" placeholder="—" /></td><td><input class="a03-cell a03-br" value="' +
+        '" placeholder="—" ' +
+        (timeDisabled ? "disabled " : "") +
+        '/></td><td><input class="a03-cell a03-br" value="' +
         (d.clock_in || d.clock_out ? d.break_minutes : "") +
-        '" placeholder="—" /></td><td><span class="a03-status ' +
-        statusClass +
-        '">' +
-        d.status +
-        "</span></td>";
+        '" placeholder="—" ' +
+        (timeDisabled ? "disabled " : "") +
+        "/></td><td>" +
+        statusCell +
+        "</td>";
       body.appendChild(tr);
+      if (d.is_holiday) {
+        var modeSel = tr.querySelector(".a03-mode");
+        modeSel.addEventListener("change", function () {
+          var disable = modeSel.value === "holiday";
+          tr.classList.toggle("is-holiday-row", disable);
+          tr.classList.toggle("is-missing-row", !disable);
+          ["a03-in", "a03-out", "a03-br"].forEach(function (cls) {
+            var inp = tr.querySelector("." + cls);
+            inp.disabled = disable;
+            if (disable) inp.value = "";
+          });
+        });
+      }
     });
     state.detailEmp = empNo;
   }
@@ -683,11 +758,13 @@
           }
           var days = [];
           $("a03-body").querySelectorAll("tr").forEach(function (tr) {
+            var modeEl = tr.querySelector(".a03-mode");
             days.push({
               work_date: tr.dataset.workDate,
               clock_in: tr.querySelector(".a03-in").value,
               clock_out: tr.querySelector(".a03-out").value,
-              break_minutes: tr.querySelector(".a03-br").value || 0
+              break_minutes: tr.querySelector(".a03-br").value || 0,
+              day_mode: modeEl ? modeEl.value : "work"
             });
           });
           await api("/api/admin/save-days", {
@@ -738,11 +815,13 @@
       }
       var days = [];
       $("e02-body").querySelectorAll("tr").forEach(function (tr) {
+        var modeEl = tr.querySelector(".e02-mode");
         days.push({
           work_date: tr.dataset.workDate,
           clock_in: tr.querySelector(".e02-in").value,
           clock_out: tr.querySelector(".e02-out").value,
-          break_minutes: tr.querySelector(".e02-br").value || 0
+          break_minutes: tr.querySelector(".e02-br").value || 0,
+          day_mode: modeEl ? modeEl.value : "work"
         });
       });
       await api("/api/employee/save-days", {
