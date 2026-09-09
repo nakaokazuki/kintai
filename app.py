@@ -5,6 +5,7 @@ import calendar
 import csv
 import io
 import os
+import threading
 from datetime import date, datetime
 from functools import wraps
 from typing import Any, Optional
@@ -337,10 +338,36 @@ def missing_and_break_counts(emp_no: str, year: int, month: int) -> tuple:
 
 # ---------- pages ----------
 
+_schema_ready = False
+_seed_started = False
+_init_lock = threading.Lock()
+
+
+def _seed_demo_background() -> None:
+    try:
+        from seed.import_demo import load_demo_data
+
+        result = load_demo_data(force=True)
+        print(f"[seed] demo loaded: {result}", flush=True)
+    except Exception as exc:
+        print(f"[seed] demo failed: {exc}", flush=True)
+
 
 @app.before_request
 def _init():
-    db.init_db()
+    """スキーマは一度だけ。重いデモ投入はバックグラウンドで行い Worker Timeout を防ぐ。"""
+    global _schema_ready, _seed_started
+    with _init_lock:
+        if not _schema_ready:
+            db.init_db(skip_auto_seed=True)
+            _schema_ready = True
+        if not _seed_started:
+            _seed_started = True
+            row = db.fetchone("SELECT COUNT(*) AS c FROM employees")
+            if row and int(row["c"]) == 0:
+                threading.Thread(
+                    target=_seed_demo_background, name="demo-seed", daemon=True
+                ).start()
 
 
 @app.route("/")

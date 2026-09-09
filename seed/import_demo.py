@@ -70,19 +70,23 @@ def load_demo_data(*, force: bool = False) -> dict:
         conn.execute("DELETE FROM attendance_days")
         conn.execute("DELETE FROM employees")
 
-        for emp_no, name in sorted(employees.items()):
-            conn.execute(
-                "INSERT INTO employees(emp_no, name, active, created_at) VALUES (?,?,1,?)",
-                (emp_no, name, now),
-            )
-
+        emp_rows = [
+            (emp_no, name, now) for emp_no, name in sorted(employees.items())
+        ]
         conn.executemany(
-            """INSERT INTO attendance_days(
-                 emp_no, work_date, clock_in, clock_out, break_minutes,
-                 on_break, break_started_at, overtime_minutes
-               ) VALUES (?,?,?,?,?,0,NULL,?)""",
-            rows,
+            "INSERT INTO employees(emp_no, name, active, created_at) VALUES (?,?,1,?)",
+            emp_rows,
         )
+
+        # Neon 向けにまとめて投入（1件ずつだとタイムアウトしやすい）
+        chunk = 500
+        sql = """INSERT INTO attendance_days(
+                     emp_no, work_date, clock_in, clock_out, break_minutes,
+                     on_break, break_started_at, overtime_minutes
+                   ) VALUES (?,?,?,?,?,0,NULL,?)"""
+        for i in range(0, len(rows), chunk):
+            conn.executemany(sql, rows[i : i + chunk])
+            conn.commit()
 
         admin = conn.execute("SELECT password FROM admin_settings WHERE id=1").fetchone()
         if not admin:
