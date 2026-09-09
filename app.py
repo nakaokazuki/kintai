@@ -6,7 +6,7 @@ import csv
 import io
 import os
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import wraps
 from typing import Any, Optional
 
@@ -66,7 +66,8 @@ def require_employee(fn):
         if not emp_no:
             return json_err("社員番号でログインしてください", 401)
         emp = db.fetchone(
-            "SELECT * FROM employees WHERE emp_no=? AND active=1", (emp_no,)
+            "SELECT emp_no, name, active FROM employees WHERE emp_no=? AND active=1",
+            (emp_no,),
         )
         if not emp:
             session.pop("emp_no", None)
@@ -93,10 +94,17 @@ def ensure_day(conn, emp_no: str, work_date: str):
     ).fetchone()
     if row:
         return row
-    conn.execute(
-        "INSERT INTO attendance_days(emp_no, work_date) VALUES (?,?)",
-        (emp_no, work_date),
-    )
+    if db.USE_POSTGRES:
+        conn.execute(
+            """INSERT INTO attendance_days(emp_no, work_date) VALUES (?,?)
+               ON CONFLICT (emp_no, work_date) DO NOTHING""",
+            (emp_no, work_date),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO attendance_days(emp_no, work_date) VALUES (?,?)",
+            (emp_no, work_date),
+        )
     return conn.execute(
         "SELECT * FROM attendance_days WHERE emp_no=? AND work_date=?",
         (emp_no, work_date),
@@ -105,23 +113,41 @@ def ensure_day(conn, emp_no: str, work_date: str):
 
 def recalc_day(conn, emp_no: str, work_date: str) -> dict:
     row = ensure_day(conn, emp_no, work_date)
-    cin = parse_hhmm(row["clock_in"])
-    cout = parse_hhmm(row["clock_out"])
-    br = int(row["break_minutes"] or 0)
-    force_work = bool(row["force_work"]) if "force_work" in row.keys() else False
-    ot = overtime_minutes(cout)
+    info = summarize_day_row(row, work_date)
     conn.execute(
         "UPDATE attendance_days SET overtime_minutes=? WHERE emp_no=? AND work_date=?",
-        (ot, emp_no, work_date),
+        (info["overtime_minutes"], emp_no, work_date),
     )
+    return info
+
+
+def summarize_day_row(row: Optional[Any], work_date: str) -> dict:
+    """DBを更新せずに1日分の状態を算出（ダッシュボード高速化用）。"""
+    if row is None:
+        cin = None
+        cout = None
+        br = 0
+        on_break = False
+        force_work = False
+        clock_in = ""
+        clock_out = ""
+    else:
+        cin = parse_hhmm(row["clock_in"])
+        cout = parse_hhmm(row["clock_out"])
+        br = int(row["break_minutes"] or 0)
+        on_break = bool(row["on_break"])
+        force_work = bool(row["force_work"]) if "force_work" in row.keys() else False
+        clock_in = row["clock_in"] or ""
+        clock_out = row["clock_out"] or ""
+    ot = overtime_minutes(cout)
     work, required, short, is_short = break_shortage(cin, cout, br)
-    label, kind = day_status_label(cin, cout, br, bool(row["on_break"]))
+    label, kind = day_status_label(cin, cout, br, on_break)
     return {
         "work_date": work_date,
-        "clock_in": row["clock_in"] or "",
-        "clock_out": row["clock_out"] or "",
+        "clock_in": clock_in,
+        "clock_out": clock_out,
         "break_minutes": br,
-        "on_break": bool(row["on_break"]),
+        "on_break": on_break,
         "force_work": force_work,
         "overtime_minutes": ot,
         "work_minutes": work,
@@ -357,6 +383,8 @@ def _seed_demo_background() -> None:
 def _init():
     """スキーマは一度だけ。重いデモ投入はバックグラウンドで行い Worker Timeout を防ぐ。"""
     global _schema_ready, _seed_started
+    if _schema_ready and _seed_started:
+        return
     with _init_lock:
         if not _schema_ready:
             db.init_db(skip_auto_seed=True)
@@ -409,12 +437,33 @@ def employee_me(emp):
 @require_employee
 def employee_today(emp):
     today = today_tokyo().isoformat()
-    with db.get_conn() as conn:
-        info = recalc_day(conn, emp["emp_no"], today)
-        conn.commit()
     ym = month_key(today_tokyo().year, today_tokyo().month)
-    sub = get_or_create_submission(emp["emp_no"], ym)
-    return json_ok({"today": info, "submission": sub, "server_date": today})
+    with db.get_conn() as conn:
+        row = ensure_day(conn, emp["emp_no"], today)
+        info = summarize_day_row(row, today)
+        # 残業分だけ必要なら更新（毎回フル recalc しない）
+        if int(row["overtime_minutes"] or 0) != info["overtime_minutes"]:
+            conn.execute(
+                "UPDATE attendance_days SET overtime_minutes=? WHERE emp_no=? AND work_date=?",
+                (info["overtime_minutes"], emp["emp_no"], today),
+            )
+        sub = conn.execute(
+            "SELECT * FROM monthly_submissions WHERE emp_no=? AND year_month=?",
+            (emp["emp_no"], ym),
+        ).fetchone()
+        if not sub:
+            conn.execute(
+                "INSERT INTO monthly_submissions(emp_no, year_month, status) VALUES (?,?,?)",
+                (emp["emp_no"], ym, "未提出"),
+            )
+            sub = conn.execute(
+                "SELECT * FROM monthly_submissions WHERE emp_no=? AND year_month=?",
+                (emp["emp_no"], ym),
+            ).fetchone()
+        conn.commit()
+    return json_ok(
+        {"today": info, "submission": db.row_to_dict(sub), "server_date": today}
+    )
 
 
 @app.post("/api/employee/punch")
@@ -424,12 +473,12 @@ def employee_punch(emp):
     now = now_tokyo()
     today = now.date().isoformat()
     hhmm = format_hhmm(now.time())
+    ym = month_key(now.year, now.month)
 
     with db.get_conn() as conn:
         row = ensure_day(conn, emp["emp_no"], today)
-        ym = month_key(now.year, now.month)
         sub = conn.execute(
-            "SELECT * FROM monthly_submissions WHERE emp_no=? AND year_month=?",
+            "SELECT status FROM monthly_submissions WHERE emp_no=? AND year_month=?",
             (emp["emp_no"], ym),
         ).fetchone()
         status = sub["status"] if sub else "未提出"
@@ -452,11 +501,12 @@ def employee_punch(emp):
             if row["on_break"] and row["break_started_at"]:
                 started = datetime.fromisoformat(row["break_started_at"])
                 br += max(0, int((now - started).total_seconds() // 60))
+            ot = overtime_minutes(parse_hhmm(hhmm))
             conn.execute(
                 """UPDATE attendance_days
-                   SET clock_out=?, on_break=0, break_started_at=NULL, break_minutes=?
+                   SET clock_out=?, on_break=0, break_started_at=NULL, break_minutes=?, overtime_minutes=?
                    WHERE emp_no=? AND work_date=?""",
-                (hhmm, br, emp["emp_no"], today),
+                (hhmm, br, ot, emp["emp_no"], today),
             )
         elif action == "break_start":
             if not row["clock_in"] or row["clock_out"]:
@@ -483,7 +533,11 @@ def employee_punch(emp):
         else:
             return json_err("不明な操作です")
 
-        info = recalc_day(conn, emp["emp_no"], today)
+        row2 = conn.execute(
+            "SELECT * FROM attendance_days WHERE emp_no=? AND work_date=?",
+            (emp["emp_no"], today),
+        ).fetchone()
+        info = summarize_day_row(row2, today)
         conn.commit()
 
     return json_ok({"today": info})
@@ -669,7 +723,6 @@ def admin_dashboard():
             use_day = False
             target_day = None
         if use_day:
-            days_in_month = calendar.monthrange(year, month)[1]
             if target_day.year != year or target_day.month != month:
                 use_day = False
                 target_day = None
@@ -688,39 +741,92 @@ def admin_dashboard():
     def emp_label(emp) -> dict:
         return {"emp_no": emp["emp_no"], "name": emp["name"]}
 
+    # 提出状況は1クエリで取得（社員ごとに INSERT しない）
+    subs = db.fetchall(
+        "SELECT emp_no, status FROM monthly_submissions WHERE year_month=?",
+        (ym,),
+    )
+    sub_map = {s["emp_no"]: s["status"] for s in subs}
     for emp in employees:
-        sub = get_or_create_submission(emp["emp_no"], ym)
-        if sub["status"] == "未提出":
+        status = sub_map.get(emp["emp_no"], "未提出")
+        if status == "未提出":
             unsubmitted_list.append(emp_label(emp))
-        elif sub["status"] == "提出済み":
+        elif status == "提出済み":
             pending_list.append(emp_label(emp))
 
+    days_in_month = calendar.monthrange(year, month)[1]
+    month_start = date(year, month, 1)
+    month_end = min(date(year, month, days_in_month), today)
+
     if use_day and target_day is not None:
-        wd = target_day.isoformat()
-        with db.get_conn() as conn:
-            for emp in employees:
-                info = recalc_day(conn, emp["emp_no"], wd)
-                if is_business_day(target_day) and info["status_kind"] == "missing":
+        range_start = range_end = target_day
+        scope = "day"
+        date_out = target_day.isoformat()
+    else:
+        range_start = month_start
+        range_end = month_end
+        scope = "month"
+        date_out = ""
+
+    # 対象期間の勤怠を一括取得（社員×日の個別クエリをやめて高速化）
+    att_rows = db.fetchall(
+        """SELECT emp_no, work_date, clock_in, clock_out, break_minutes, on_break, force_work
+           FROM attendance_days
+           WHERE work_date >= ? AND work_date <= ?""",
+        (range_start.isoformat(), range_end.isoformat()),
+    )
+    att_map: dict[tuple[str, str], Any] = {}
+    for r in att_rows:
+        att_map[(r["emp_no"], r["work_date"])] = r
+
+    dates: list[date] = []
+    cursor = range_start
+    while cursor <= range_end:
+        dates.append(cursor)
+        cursor += timedelta(days=1)
+
+    for emp in employees:
+        emp_missing = 0
+        emp_break = 0
+        for d in dates:
+            wd = d.isoformat()
+            row = att_map.get((emp["emp_no"], wd))
+            info = summarize_day_row(row, wd)
+            holiday = not is_business_day(d)
+            if (
+                holiday
+                and not info["force_work"]
+                and not info["clock_in"]
+                and not info["clock_out"]
+            ):
+                info["status"] = "休日"
+                info["status_kind"] = "holiday"
+                info["break_short"] = False
+
+            if scope == "day":
+                if is_business_day(d) and info["status_kind"] == "missing":
                     missing_list.append(emp_label(emp))
                 if info["break_short"]:
                     break_list.append(emp_label(emp))
-            conn.commit()
+            else:
+                if not is_business_day(d):
+                    continue
+                if info["status_kind"] == "missing":
+                    emp_missing += 1
+                if info["break_short"]:
+                    emp_break += 1
+
+        if scope == "month":
+            if emp_missing > 0:
+                missing_list.append(emp_label(emp))
+                missing_value += emp_missing
+            if emp_break > 0:
+                break_list.append(emp_label(emp))
+                break_value += emp_break
+
+    if scope == "day":
         missing_value = len(missing_list)
         break_value = len(break_list)
-        scope = "day"
-        date_out = wd
-    else:
-        # 対象日未選択: 月の未入力日数・休憩不足日数の合計
-        for emp in employees:
-            missing, br, _ = missing_and_break_counts(emp["emp_no"], year, month)
-            if missing > 0:
-                missing_list.append(emp_label(emp))
-                missing_value += missing
-            if br > 0:
-                break_list.append(emp_label(emp))
-                break_value += br
-        scope = "month"
-        date_out = ""
 
     return json_ok(
         {
