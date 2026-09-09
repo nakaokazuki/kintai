@@ -14,8 +14,8 @@
         <div class="app-header">
           <h1>勤怠システム（社員）</h1>
           <div class="header-links">
-            <button type="button" class="linkish" data-goto="e02">月次一覧</button>
-            <button type="button" class="linkish" data-action="submit">提出</button>
+            <button type="button" class="linkish" id="btn-goto-e02" data-goto="e02" disabled>月次一覧</button>
+            <button type="button" class="linkish" id="btn-emp-submit" data-action="submit" disabled>提出</button>
             <button type="button" class="linkish" data-goto="a01">管理者</button>
           </div>
         </div>
@@ -23,7 +23,7 @@
         <div class="card">
           <label class="field-label" for="emp-id">社員番号</label>
           <div class="row">
-            <input id="emp-id" class="input" type="text" maxlength="4" inputmode="numeric" value="1001" />
+            <input id="emp-id" class="input" type="text" maxlength="4" inputmode="numeric" value="" placeholder="4桁" autocomplete="off" />
             <button type="button" class="btn btn-secondary" id="btn-emp-confirm">確認</button>
           </div>
           <p class="identity" id="e01-identity">氏名：—　番号：—</p>
@@ -107,7 +107,7 @@
             <span class="kpi-label">未入力</span>
             <span class="kpi-value" id="kpi-missing">—</span>
           </button>
-          <button type="button" class="kpi kpi-alert kpi-click" data-kpi="break_short">
+          <button type="button" class="kpi kpi-click" data-kpi="break_short">
             <span class="kpi-label">休憩不足</span>
             <span class="kpi-value" id="kpi-break">—</span>
           </button>

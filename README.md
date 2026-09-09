@@ -42,18 +42,21 @@ cd test
 4. 設定例
    - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT`
-5. 環境変数（任意）
+5. 環境変数
+   - **`DATABASE_URL`（必須）** … [Neon](https://neon.tech/) などの Postgres 接続文字列。未設定だと再デプロイでデータが消える
    - `SECRET_KEY` … ランダム文字列
    - `ADMIN_PASSWORD` … 管理者パスワード
    - `ADMIN_RESET_CODE` … リセットコード
    - `KINTAI_STRICT_SUBMIT=1` … 提出を「翌月最初の営業日のみ」に厳格化（未設定/`0` ならデモ用に毎日提出可）
+
+手順の詳細は `DEPLOY.md` を参照。
 
 デプロイ後の URL（例: `https://xxxx.onrender.com`）を社員に共有する。
 
 ### 無料枠の注意
 
 - 約15分アクセスがないとスリープし、復帰に数十秒かかることがある
-- SQLite はインスタンス再起動で消えることがある（研修デモ向け）。本番長期運用なら有料DB等を検討
+- **データ永続化には `DATABASE_URL`（Neon Postgres）が必須**。ローカルは SQLite のままで可
 
 ## 主な仕様
 

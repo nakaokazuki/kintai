@@ -94,6 +94,53 @@
     /* 上部ヘッダー削除後も呼び出し互換のため残す */
   }
 
+  function isEmployeeActive() {
+    var empId = ($("emp-id").value || "").trim();
+    return !!(state.emp && empId && empId === state.emp.emp_no);
+  }
+
+  function setEmployeeNavEnabled(on) {
+    $("btn-goto-e02").disabled = !on;
+    $("btn-emp-submit").disabled = !on;
+  }
+
+  function resetEmployeeUi() {
+    state.emp = null;
+    state.today = null;
+    if (state.role === "employee") state.role = null;
+    $("e01-identity").textContent = "氏名：—　番号：—";
+    $("e01-today-title").textContent = "本日";
+    $("alert-break").classList.add("is-hidden");
+    updatePunchButtons(null);
+    setEmployeeNavEnabled(false);
+  }
+
+  async function logoutEmployee() {
+    resetEmployeeUi();
+    try {
+      await api("/api/employee/logout", { method: "POST" });
+    } catch (e) {}
+  }
+
+  function syncEmployeeLoginFromInput() {
+    var empId = ($("emp-id").value || "").trim();
+    if (!empId) {
+      if (state.emp) {
+        logoutEmployee();
+      } else {
+        resetEmployeeUi();
+      }
+      var e02 = document.getElementById("e02");
+      if (e02 && e02.classList.contains("is-visible")) {
+        showScreen("e01");
+      }
+      return;
+    }
+    if (state.emp && empId !== state.emp.emp_no) {
+      logoutEmployee();
+    }
+  }
+
   function isAdminScreen(id) {
     return ["a01", "a03", "a04", "a05"].indexOf(id) >= 0;
   }
@@ -104,7 +151,7 @@
       openAdminModal();
       return;
     }
-    if ((id === "e02" || id === "e01") && !state.emp && id === "e02") {
+    if (id === "e02" && !isEmployeeActive()) {
       alert("先に社員番号を確認してください");
       id = "e01";
     }
@@ -117,7 +164,7 @@
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    if (id === "e01" && state.emp) refreshToday();
+    if (id === "e01" && isEmployeeActive()) refreshToday();
     if (id === "e02") refreshEmpMonth();
     if (id === "a01") refreshDashboard();
     if (id === "a03") {
@@ -181,17 +228,22 @@
   }
 
   async function refreshToday() {
-    if (!state.emp) return;
+    if (!isEmployeeActive()) {
+      updatePunchButtons(null);
+      setEmployeeNavEnabled(false);
+      return;
+    }
     var data = await api("/api/employee/today");
     state.today = data.today;
     $("e01-identity").textContent =
       "氏名：" + state.emp.name + "　番号：" + state.emp.emp_no;
     $("e01-today-title").textContent = "本日 " + formatDisplayDate(data.server_date);
     updatePunchButtons(data.today);
+    setEmployeeNavEnabled(true);
   }
 
   async function refreshEmpMonth() {
-    if (!state.emp) {
+    if (!isEmployeeActive()) {
       alert("先に社員番号を確認してください");
       showScreen("e01");
       return;
@@ -595,7 +647,7 @@
   }
 
   async function openSubmitModal() {
-    if (!state.emp) {
+    if (!isEmployeeActive()) {
       alert("先に社員番号を確認してください");
       return;
     }
@@ -650,6 +702,11 @@
     "click",
     withError(async function () {
       var emp_no = $("emp-id").value.trim();
+      if (!emp_no) {
+        await logoutEmployee();
+        alert("社員番号を入力してください");
+        return;
+      }
       var data = await api("/api/employee/login", {
         method: "POST",
         body: JSON.stringify({ emp_no: emp_no })
@@ -658,9 +715,17 @@
       state.emp = data;
       state.empMonth = defaultMonthKey();
       setSessionLabel();
+      setEmployeeNavEnabled(true);
       await refreshToday();
     })
   );
+
+  $("emp-id").addEventListener("input", function () {
+    syncEmployeeLoginFromInput();
+  });
+  $("emp-id").addEventListener("change", function () {
+    syncEmployeeLoginFromInput();
+  });
 
   $("btn-admin-login").addEventListener(
     "click",
@@ -699,7 +764,7 @@
       withError(async function () {
         var action = el.dataset.action;
         if (action === "work") {
-          if (!state.emp) {
+          if (!isEmployeeActive()) {
             alert("先に社員番号を確認してください");
             return;
           }
@@ -718,7 +783,7 @@
           updatePunchButtons(data.today);
         }
         if (action === "break") {
-          if (!state.emp) return;
+          if (!isEmployeeActive()) return;
           var t = state.today || {};
           var b = t.on_break ? "break_end" : "break_start";
           var bd = await api("/api/employee/punch", {
@@ -899,6 +964,7 @@
   });
   document.querySelectorAll("[data-goto]").forEach(function (el) {
     el.addEventListener("click", function () {
+      if (el.disabled) return;
       showScreen(el.dataset.goto);
     });
   });
@@ -911,6 +977,7 @@
   });
 
   updatePunchButtons(null);
+  setEmployeeNavEnabled(false);
 
   withError(async function () {
     try {
@@ -920,9 +987,12 @@
       state.empMonth = defaultMonthKey();
       $("emp-id").value = me.emp_no;
       setSessionLabel();
+      setEmployeeNavEnabled(true);
       await refreshToday();
       return;
-    } catch (e) {}
+    } catch (e) {
+      resetEmployeeUi();
+    }
     try {
       var adm = await api("/api/admin/me");
       if (adm.admin) {

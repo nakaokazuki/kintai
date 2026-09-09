@@ -152,6 +152,13 @@ select {
   font-size: 1rem;
 }
 
+.linkish:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
+  color: var(--muted);
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -625,6 +632,12 @@ select {
 .action-row-full .btn {
   width: 100%;
   min-width: 0;
+}
+
+#a01 .action-row-full .btn-secondary {
+  background: #eaf2fa;
+  border-color: #c5d6e8;
+  color: #1f4a7a;
 }
 
 .action-stack .btn {
