@@ -90,6 +90,10 @@
           <label class="field-label" for="a01-month">対象月</label>
           <select id="a01-month" class="input month-select" aria-label="対象月"></select>
         </div>
+        <div class="month-row">
+          <label class="field-label" for="a01-day">日付</label>
+          <select id="a01-day" class="input month-select" aria-label="未入力・休憩不足の対象日"></select>
+        </div>
         <div class="kpi-grid">
           <button type="button" class="kpi kpi-click" data-kpi="unsubmitted">
             <span class="kpi-label">未提出</span>
@@ -99,14 +103,10 @@
             <span class="kpi-label">承認待ち</span>
             <span class="kpi-value" id="kpi-pending">—</span>
           </button>
-          <div class="kpi kpi-with-day">
-            <button type="button" class="kpi-click-inner" data-kpi="missing">
-              <span class="kpi-label">未入力</span>
-              <span class="kpi-value" id="kpi-missing">—</span>
-            </button>
-            <label class="field-label kpi-day-label" for="a01-day">日付</label>
-            <select id="a01-day" class="input kpi-day-select" aria-label="未入力・休憩不足の対象日"></select>
-          </div>
+          <button type="button" class="kpi kpi-click" data-kpi="missing">
+            <span class="kpi-label">未入力</span>
+            <span class="kpi-value" id="kpi-missing">—</span>
+          </button>
           <button type="button" class="kpi kpi-alert kpi-click" data-kpi="break_short">
             <span class="kpi-label">休憩不足</span>
             <span class="kpi-value" id="kpi-break">—</span>

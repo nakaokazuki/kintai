@@ -657,13 +657,16 @@ def admin_dashboard():
     def emp_label(emp) -> dict:
         return {"emp_no": emp["emp_no"], "name": emp["name"]}
 
+    # 提出状況は別接続で先に取得（長時間の接続保持中に書かない）
+    for emp in employees:
+        sub = get_or_create_submission(emp["emp_no"], ym)
+        if sub["status"] == "未提出":
+            unsubmitted_list.append(emp_label(emp))
+        elif sub["status"] == "提出済み":
+            pending_list.append(emp_label(emp))
+
     with db.get_conn() as conn:
         for emp in employees:
-            sub = get_or_create_submission(emp["emp_no"], ym)
-            if sub["status"] == "未提出":
-                unsubmitted_list.append(emp_label(emp))
-            elif sub["status"] == "提出済み":
-                pending_list.append(emp_label(emp))
             info = recalc_day(conn, emp["emp_no"], wd)
             if is_business_day(target_day) and info["status_kind"] == "missing":
                 missing_list.append(emp_label(emp))
