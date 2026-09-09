@@ -46,7 +46,7 @@
 
   function monthLabel(ym) {
     var p = ym.split("-");
-    return p[0] + "年" + parseInt(p[1], 10) + "月";
+    return p[0] + "/" + parseInt(p[1], 10);
   }
 
   /** 2026-09-09 → 2026/9/9 */
@@ -289,7 +289,7 @@
         var timeDisabled = d.is_holiday && d.day_mode !== "work";
         tr.innerHTML =
           "<td>" +
-          d.day +
+          formatDisplayDate(d.work_date) +
           '</td><td><input class="a03-cell e02-in" value="' +
           (d.clock_in || "") +
           '" placeholder="—" ' +
@@ -310,7 +310,7 @@
       } else {
         tr.innerHTML =
           "<td>" +
-          d.day +
+          formatDisplayDate(d.work_date) +
           "</td><td>" +
           (d.clock_in || "—") +
           "</td><td>" +
@@ -503,8 +503,6 @@
             : d.status_kind === "holiday"
               ? "is-leave"
               : "is-missing";
-      var md = d.work_date.slice(5).replace("-", "/");
-      if (md.charAt(0) === "0") md = md.slice(1);
       var statusCell;
       if (d.is_holiday) {
         var mode = d.day_mode === "work" ? "work" : "holiday";
@@ -528,7 +526,7 @@
       var timeDisabled = d.is_holiday && d.day_mode !== "work";
       tr.innerHTML =
         "<td>" +
-        md +
+        formatDisplayDate(d.work_date) +
         "</td><td>" +
         d.weekday +
         '</td><td><input class="a03-cell a03-in" value="' +
@@ -577,7 +575,7 @@
     body.innerHTML = "";
     data.rows.forEach(function (r) {
       var tr = document.createElement("tr");
-      var day = r.display_date || r.created_at;
+      var day = formatDisplayDate(r.display_date || r.created_at);
       tr.innerHTML =
         "<td>" +
         day +

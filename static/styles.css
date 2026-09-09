@@ -250,10 +250,27 @@ select {
   margin-bottom: 16px;
 }
 
+.month-filters {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.month-filters .month-row {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 .month-select {
   width: 100%;
   max-width: 280px;
   display: block;
+}
+
+.month-filters .month-select {
+  max-width: none;
 }
 
 .modal {

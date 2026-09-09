@@ -62,7 +62,7 @@
         <div class="table-wrap">
           <table class="data-table" id="e02-table">
             <thead>
-              <tr><th>日</th><th>出勤</th><th>退勤</th><th>休憩</th><th>残業</th><th>状態</th></tr>
+              <tr><th>日付</th><th>出勤</th><th>退勤</th><th>休憩</th><th>残業</th><th>状態</th></tr>
             </thead>
             <tbody id="e02-body"></tbody>
           </table>
@@ -86,13 +86,15 @@
             <button type="button" class="linkish" data-goto="e01">打刻</button>
           </div>
         </div>
-        <div class="month-row">
-          <label class="field-label" for="a01-month">対象月</label>
-          <select id="a01-month" class="input month-select" aria-label="対象月"></select>
-        </div>
-        <div class="month-row">
-          <label class="field-label" for="a01-day">対象日</label>
-          <select id="a01-day" class="input month-select" aria-label="未入力・休憩不足の対象日"></select>
+        <div class="month-filters">
+          <div class="month-row">
+            <label class="field-label" for="a01-month">対象月</label>
+            <select id="a01-month" class="input month-select" aria-label="対象月"></select>
+          </div>
+          <div class="month-row">
+            <label class="field-label" for="a01-day">対象日</label>
+            <select id="a01-day" class="input month-select" aria-label="未入力・休憩不足の対象日"></select>
+          </div>
         </div>
         <div class="kpi-grid">
           <button type="button" class="kpi kpi-click" data-kpi="unsubmitted">

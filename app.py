@@ -968,10 +968,10 @@ def admin_csv():
         for d in days:
             writer.writerow(
                 [
-                    ym,
+                    f"{year}/{month}",
                     emp["emp_no"],
                     emp["name"],
-                    d["work_date"],
+                    format_log_date(d["work_date"]),
                     d["clock_in"] or "",
                     d["clock_out"] or "",
                     d["break_minutes"],
