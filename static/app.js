@@ -105,6 +105,38 @@
     $("btn-emp-submit").disabled = !on;
   }
 
+  var EMP_STORAGE_KEY = "kintai_emp_no";
+
+  function saveEmpNoLocal(empNo) {
+    try {
+      if (empNo) localStorage.setItem(EMP_STORAGE_KEY, String(empNo));
+      else localStorage.removeItem(EMP_STORAGE_KEY);
+    } catch (e) {}
+  }
+
+  function loadEmpNoLocal() {
+    try {
+      return (localStorage.getItem(EMP_STORAGE_KEY) || "").trim();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function applyEmployeeLogin(data) {
+    state.role = "employee";
+    state.emp = {
+      emp_no: data.emp_no,
+      name: data.name || ""
+    };
+    state.empMonth = defaultMonthKey();
+    $("emp-id").value = data.emp_no;
+    saveEmpNoLocal(data.emp_no);
+    $("e01-identity").textContent =
+      "氏名：" + (data.name || "—") + "　番号：" + data.emp_no;
+    setSessionLabel();
+    setEmployeeNavEnabled(true);
+  }
+
   function resetEmployeeUi() {
     state.emp = null;
     state.today = null;
@@ -127,6 +159,7 @@
     if (state.empBusy) return;
     var empId = ($("emp-id").value || "").trim();
     if (!empId) {
+      saveEmpNoLocal("");
       if (state.emp) {
         logoutEmployee();
       } else {
@@ -733,17 +766,7 @@
         if (!data || !data.emp_no) {
           throw new Error("ログインに失敗しました");
         }
-        state.role = "employee";
-        state.emp = {
-          emp_no: data.emp_no,
-          name: data.name || ""
-        };
-        state.empMonth = defaultMonthKey();
-        $("emp-id").value = data.emp_no;
-        $("e01-identity").textContent =
-          "氏名：" + (data.name || "—") + "　番号：" + data.emp_no;
-        setSessionLabel();
-        setEmployeeNavEnabled(true);
+        applyEmployeeLogin(data);
         await refreshToday();
       } finally {
         state.empBusy = false;
@@ -1141,31 +1164,51 @@
   updatePunchButtons(null);
   setEmployeeNavEnabled(false);
 
+  /* タブを閉じても社員番号を残す */
+  var savedEmpNo = loadEmpNoLocal();
+  if (savedEmpNo) {
+    $("emp-id").value = savedEmpNo;
+  }
+
   withError(async function () {
     try {
       var me = await api("/api/employee/me");
-      if (!me || !me.emp_no) {
-        resetEmployeeUi();
-      } else {
+      if (me && me.emp_no) {
         state.empBusy = true;
         try {
-          state.role = "employee";
-          state.emp = { emp_no: me.emp_no, name: me.name || "" };
-          state.empMonth = defaultMonthKey();
-          $("emp-id").value = me.emp_no;
-          $("e01-identity").textContent =
-            "氏名：" + (me.name || "—") + "　番号：" + me.emp_no;
-          setSessionLabel();
-          setEmployeeNavEnabled(true);
+          applyEmployeeLogin(me);
           await refreshToday();
         } finally {
           state.empBusy = false;
         }
         return;
       }
-    } catch (e) {
+    } catch (e) {}
+
+    if (savedEmpNo) {
+      state.empBusy = true;
+      try {
+        var data = await api("/api/employee/login", {
+          method: "POST",
+          body: JSON.stringify({ emp_no: savedEmpNo })
+        });
+        if (data && data.emp_no) {
+          applyEmployeeLogin(data);
+          await refreshToday();
+          return;
+        }
+      } catch (eLogin) {
+        /* 番号は入力欄に残し、確認はユーザーに任せる */
+        $("emp-id").value = savedEmpNo;
+        resetEmployeeUi();
+        $("emp-id").value = savedEmpNo;
+      } finally {
+        state.empBusy = false;
+      }
+    } else {
       resetEmployeeUi();
     }
+
     try {
       var adm = await api("/api/admin/me");
       if (adm.admin) {
