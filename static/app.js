@@ -796,25 +796,53 @@
 
   var punchSaving = false;
 
+  function ensurePunchModal() {
+    var modal = $("punch-modal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "punch-modal";
+    modal.className = "modal is-hidden";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.innerHTML =
+      '<div class="modal-backdrop"></div>' +
+      '<div class="modal-panel modal-panel-compact">' +
+      '<h2 id="punch-modal-title" class="card-title">記録中</h2>' +
+      '<p class="hint" id="punch-modal-msg">サーバに保存しています。完了するまでタブを閉じないでください。</p>' +
+      "</div>";
+    document.body.appendChild(modal);
+    return modal;
+  }
+
   function showPunchSaving(message) {
     punchSaving = true;
-    $("punch-modal-title").textContent = "記録中";
-    $("punch-modal-msg").textContent =
-      message || "サーバに保存しています。完了するまでタブを閉じないでください。";
-    $("punch-modal").classList.remove("is-hidden");
+    ensurePunchModal();
+    var title = $("punch-modal-title");
+    var msg = $("punch-modal-msg");
+    var modal = $("punch-modal");
+    if (title) title.textContent = "記録中";
+    if (msg) {
+      msg.textContent =
+        message || "サーバに保存しています。完了するまでタブを閉じないでください。";
+    }
+    if (modal) modal.classList.remove("is-hidden");
   }
 
   function hidePunchSaving(okMessage) {
-    if (okMessage) {
-      $("punch-modal-title").textContent = "記録完了";
-      $("punch-modal-msg").textContent = okMessage;
+    ensurePunchModal();
+    var title = $("punch-modal-title");
+    var msg = $("punch-modal-msg");
+    var modal = $("punch-modal");
+    if (okMessage && title && msg && modal) {
+      title.textContent = "記録完了";
+      msg.textContent = okMessage;
       setTimeout(function () {
-        $("punch-modal").classList.add("is-hidden");
+        modal.classList.add("is-hidden");
         punchSaving = false;
       }, 600);
       return;
     }
-    $("punch-modal").classList.add("is-hidden");
+    if (modal) modal.classList.add("is-hidden");
     punchSaving = false;
   }
 
