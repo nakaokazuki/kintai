@@ -43,58 +43,6 @@ select {
   color: inherit;
 }
 
-/* ---- 開発用バー ---- */
-.dev-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--header);
-  color: #fff;
-  padding: 10px 12px 12px;
-  border-bottom: 2px solid #1d2c3d;
-}
-
-.dev-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.dev-bar strong {
-  margin-right: 8px;
-  font-size: 1rem;
-}
-
-.dev-note {
-  color: #ccc;
-  font-size: 0.85rem;
-}
-
-.nav-btn {
-  border: 1px solid #7ea0c2;
-  background: #3a516b;
-  color: #fff;
-  border-radius: 6px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.nav-btn.is-active {
-  background: #fff;
-  color: var(--header);
-  border-color: #fff;
-}
-
-.screen-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
 /* ---- ステージ（パソコン表示） ---- */
 .stage {
   padding: 20px 12px 48px;

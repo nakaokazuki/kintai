@@ -22,7 +22,7 @@
     return d.getFullYear() + "-" + pad(d.getMonth() + 1);
   }
 
-  /** デモデータ（2026年4月）を優先表示 */
+  /** 標準デモデータ（2026年4月）を最初に表示 */
   var DEMO_MONTH = "2026-04";
 
   function defaultMonthKey() {
@@ -76,14 +76,7 @@
   }
 
   function setSessionLabel() {
-    var label = $("session-label");
-    if (state.role === "employee" && state.emp) {
-      label.textContent = state.emp.name + "（" + state.emp.emp_no + "）";
-    } else if (state.role === "admin") {
-      label.textContent = "管理者";
-    } else {
-      label.textContent = "パソコン表示";
-    }
+    /* 上部ヘッダー削除後も呼び出し互換のため残す */
   }
 
   function isAdminScreen(id) {
@@ -192,7 +185,7 @@
     }
     if (!state.empMonth) state.empMonth = defaultMonthKey();
     var data = await api("/api/employee/month?month=" + state.empMonth);
-    $("e02-title").textContent = "月次一覧　" + monthLabel(state.empMonth);
+    $("e02-title").textContent = monthLabel(state.empMonth) + "の月次一覧";
     $("e02-status").textContent = data.submission.status;
     var body = $("e02-body");
     body.innerHTML = "";

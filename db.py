@@ -24,7 +24,7 @@ def get_conn() -> sqlite3.Connection:
     return conn
 
 
-def init_db() -> None:
+def init_db(*, skip_auto_seed: bool = False) -> None:
     with get_conn() as conn:
         conn.executescript(
             """
@@ -80,21 +80,6 @@ def init_db() -> None:
             );
             """
         )
-        row = conn.execute("SELECT COUNT(*) AS c FROM employees").fetchone()
-        if row["c"] == 0:
-            from logic import now_tokyo
-
-            now = now_tokyo().isoformat(timespec="seconds")
-            # デモ社員は seed/import_demo.py で投入。空のときだけ最小セット。
-            seed = [
-                ("1001", "佐藤 太郎"),
-                ("1002", "鈴木 美咲"),
-                ("1003", "高橋 優"),
-            ]
-            conn.executemany(
-                "INSERT INTO employees(emp_no, name, active, created_at) VALUES (?,?,1,?)",
-                [(e, n, now) for e, n in seed],
-            )
         admin = conn.execute("SELECT password FROM admin_settings WHERE id=1").fetchone()
         if not admin:
             from logic import now_tokyo
@@ -103,6 +88,15 @@ def init_db() -> None:
                 "INSERT INTO admin_settings(id, password, updated_at) VALUES (1, ?, ?)",
                 (DEFAULT_ADMIN_PASSWORD, now_tokyo().isoformat(timespec="seconds")),
             )
+            conn.commit()
+
+        emp_count = conn.execute("SELECT COUNT(*) AS c FROM employees").fetchone()["c"]
+
+    # 標準デモ（1001〜1100 / 2026年4月）を空DB時に自動投入
+    if emp_count == 0 and not skip_auto_seed:
+        from seed.import_demo import load_demo_data
+
+        load_demo_data(force=True)
 
 
 def fetchone(sql: str, args: tuple = ()) -> Optional[sqlite3.Row]:

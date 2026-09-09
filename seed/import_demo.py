@@ -1,7 +1,9 @@
-"""デモ勤怠データを seed/demo.tsv から取り込む。
+"""標準デモ勤怠データを seed/demo.tsv から取り込む。
 
 使い方:
-  cd test && .venv/bin/python seed/import_demo.py
+  .venv/bin/python seed/import_demo.py
+
+DBが空のときはアプリ起動時（db.init_db）でも自動投入される。
 """
 from __future__ import annotations
 
@@ -15,6 +17,8 @@ sys.path.insert(0, str(ROOT))
 import db
 from logic import now_tokyo, overtime_minutes, parse_hhmm, minutes_between, required_break_minutes
 
+TSV_PATH = Path(__file__).with_name("demo.tsv")
+
 
 def default_break(clock_in: str, clock_out: str) -> int:
     """デモ用: 在社時間に応じた法令必要休憩を入れる（不足デモを避ける）。"""
@@ -23,8 +27,6 @@ def default_break(clock_in: str, clock_out: str) -> int:
     if not cin or not cout:
         return 0
     span = minutes_between(cin, cout)
-    # 労働時間 ≒ 在社 - 休憩 なので、必要休憩を満たすよう設定
-    # span - br = work; required(work) <= br
     for br in (60, 45, 0):
         work = max(0, span - br)
         if required_break_minutes(work) <= br:
@@ -32,17 +34,24 @@ def default_break(clock_in: str, clock_out: str) -> int:
     return 60
 
 
-def main() -> None:
-    tsv = Path(__file__).with_name("demo.tsv")
-    if not tsv.exists():
-        raise SystemExit(f"missing {tsv}")
+def load_demo_data(*, force: bool = False) -> dict:
+    """demo.tsv を標準データとして投入する。
 
-    db.init_db()
+    force=False のとき、社員が既にあれば何もしない。
+    """
+    if not TSV_PATH.exists():
+        raise FileNotFoundError(f"missing {TSV_PATH}")
+
+    db.init_db(skip_auto_seed=True)
+    with db.get_conn() as conn:
+        count = conn.execute("SELECT COUNT(*) AS c FROM employees").fetchone()["c"]
+        if count > 0 and not force:
+            return {"skipped": True, "employees": count, "attendance_rows": 0}
+
     now = now_tokyo().isoformat(timespec="seconds")
-
     employees: dict[str, str] = {}
     rows: list[tuple] = []
-    with tsv.open(encoding="utf-8") as f:
+    with TSV_PATH.open(encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for r in reader:
             emp_no = r["社員番号"].strip()
@@ -75,17 +84,25 @@ def main() -> None:
             rows,
         )
 
-        # 管理者パスワードは維持（無ければ 7777）
         admin = conn.execute("SELECT password FROM admin_settings WHERE id=1").fetchone()
         if not admin:
             conn.execute(
                 "INSERT INTO admin_settings(id, password, updated_at) VALUES (1, ?, ?)",
-                ("7777", now),
+                (db.DEFAULT_ADMIN_PASSWORD, now),
             )
         conn.commit()
 
-    print(f"employees: {len(employees)}")
-    print(f"attendance rows: {len(rows)}")
+    return {
+        "skipped": False,
+        "employees": len(employees),
+        "attendance_rows": len(rows),
+    }
+
+
+def main() -> None:
+    result = load_demo_data(force=True)
+    print(f"employees: {result['employees']}")
+    print(f"attendance rows: {result['attendance_rows']}")
     print("done")
 
 

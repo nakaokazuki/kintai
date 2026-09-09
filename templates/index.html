@@ -7,23 +7,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
 </head>
 <body>
-  <header class="dev-bar">
-    <div class="dev-top">
-      <div>
-        <strong>勤怠システム</strong>
-        <span class="dev-note" id="session-label">パソコン表示</span>
-      </div>
-    </div>
-    <nav class="screen-nav" aria-label="画面切替" id="main-nav">
-      <button type="button" class="nav-btn is-active" data-screen="e01">E-01 打刻</button>
-      <button type="button" class="nav-btn" data-screen="e02">E-02 月次一覧</button>
-      <button type="button" class="nav-btn" data-screen="a01">A-01 ダッシュボード</button>
-      <button type="button" class="nav-btn" data-screen="a03">A-03 勤怠詳細</button>
-      <button type="button" class="nav-btn" data-screen="a04">A-04 変更履歴</button>
-      <button type="button" class="nav-btn" data-screen="a05">A-05 社員管理</button>
-    </nav>
-  </header>
-
   <main class="stage">
     <!-- E-01 ホーム／打刻 -->
     <section id="e01" class="screen is-visible" aria-label="ホーム／打刻">
@@ -33,6 +16,7 @@
           <div class="header-links">
             <button type="button" class="linkish" data-goto="e02">月次一覧</button>
             <button type="button" class="linkish" data-action="submit">提出</button>
+            <button type="button" class="linkish" data-goto="a01">管理者</button>
           </div>
         </div>
 
