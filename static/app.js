@@ -5,6 +5,8 @@
     today: null,
     empMonth: null,
     adminMonth: null,
+    adminDay: null,
+    dashboardLists: null,
     detailEmp: null,
     pendingAdminScreen: null
   };
@@ -44,6 +46,21 @@
   function monthLabel(ym) {
     var p = ym.split("-");
     return p[0] + "年" + parseInt(p[1], 10) + "月";
+  }
+
+  /** 2026-09-09 → 2026/9/9 */
+  function formatDisplayDate(isoDate) {
+    if (!isoDate) return "—";
+    var day = String(isoDate).replace("T", " ").slice(0, 10).replace(/-/g, "/");
+    var parts = day.split("/");
+    if (parts.length !== 3) return day;
+    return (
+      parseInt(parts[0], 10) +
+      "/" +
+      parseInt(parts[1], 10) +
+      "/" +
+      parseInt(parts[2], 10)
+    );
   }
 
   async function api(url, options) {
@@ -168,7 +185,7 @@
     state.today = data.today;
     $("e01-identity").textContent =
       "氏名：" + state.emp.name + "　番号：" + state.emp.emp_no;
-    $("e01-today-title").textContent = "本日 " + data.server_date;
+    $("e01-today-title").textContent = "本日 " + formatDisplayDate(data.server_date);
     updatePunchButtons(data.today);
   }
 
@@ -182,27 +199,54 @@
     var data = await api("/api/employee/month?month=" + state.empMonth);
     $("e02-title").textContent = monthLabel(state.empMonth) + "の月次一覧";
     $("e02-status").textContent = data.submission.status;
+    var editable =
+      data.submission.status === "未提出" || data.submission.status === "差戻し";
+    $("e02-edit-block").classList.toggle("is-hidden", !editable);
     var body = $("e02-body");
     body.innerHTML = "";
     data.days.forEach(function (d) {
       var tr = document.createElement("tr");
       if (d.status_kind === "missing") tr.className = "row-missing";
       if (d.status_kind === "break") tr.className = "row-break";
-      var statusText = d.status === "休憩不足" ? "休不足" : d.status;
-      tr.innerHTML =
-        "<td>" +
-        d.day +
-        "</td><td>" +
-        (d.clock_in || "—") +
-        "</td><td>" +
-        (d.clock_out || "—") +
-        "</td><td>" +
-        (d.clock_in ? d.break_minutes : "—") +
-        "</td><td>" +
-        (d.clock_out ? d.overtime_minutes : "—") +
-        "</td><td>" +
-        statusText +
-        "</td>";
+      if (d.status_kind === "holiday") tr.className = "row-holiday";
+      tr.dataset.workDate = d.work_date;
+      var statusText =
+        d.status === "休憩不足"
+          ? "休不足"
+          : d.status === "休日"
+            ? "休日"
+            : d.status;
+      if (editable) {
+        tr.innerHTML =
+          "<td>" +
+          d.day +
+          '</td><td><input class="a03-cell e02-in" value="' +
+          (d.clock_in || "") +
+          '" placeholder="—" /></td><td><input class="a03-cell e02-out" value="' +
+          (d.clock_out || "") +
+          '" placeholder="—" /></td><td><input class="a03-cell e02-br" value="' +
+          (d.clock_in || d.clock_out ? d.break_minutes : "") +
+          '" placeholder="—" /></td><td>' +
+          (d.clock_out ? d.overtime_minutes : "—") +
+          "</td><td>" +
+          statusText +
+          "</td>";
+      } else {
+        tr.innerHTML =
+          "<td>" +
+          d.day +
+          "</td><td>" +
+          (d.clock_in || "—") +
+          "</td><td>" +
+          (d.clock_out || "—") +
+          "</td><td>" +
+          (d.clock_in ? d.break_minutes : "—") +
+          "</td><td>" +
+          (d.clock_out ? d.overtime_minutes : "—") +
+          "</td><td>" +
+          statusText +
+          "</td>";
+      }
       body.appendChild(tr);
     });
   }
@@ -225,14 +269,105 @@
     }
   }
 
+  function fillDaySelect(ym, selectedIso) {
+    var sel = $("a01-day");
+    sel.innerHTML = "";
+    var parts = ym.split("-");
+    var y = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    var last = new Date(y, m, 0).getDate();
+    var today = new Date();
+    var todayIso =
+      today.getFullYear() +
+      "-" +
+      pad(today.getMonth() + 1) +
+      "-" +
+      pad(today.getDate());
+    var pick = selectedIso;
+    if (!pick || pick.slice(0, 7) !== ym) {
+      pick = todayIso.slice(0, 7) === ym ? todayIso : ym + "-" + pad(Math.min(last, today.getDate()));
+      if (todayIso.slice(0, 7) !== ym) {
+        pick = ym + "-" + pad(last);
+      }
+    }
+    for (var d = 1; d <= last; d++) {
+      var iso = ym + "-" + pad(d);
+      var opt = document.createElement("option");
+      opt.value = iso;
+      opt.textContent = formatDisplayDate(iso);
+      if (iso === pick) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    if (!sel.value && sel.options.length) {
+      sel.selectedIndex = 0;
+    }
+    state.adminDay = sel.value;
+  }
+
   async function refreshDashboard() {
     if (!state.adminMonth) state.adminMonth = defaultMonthKey();
     fillMonthSelect("a01-month", state.adminMonth);
-    var data = await api("/api/admin/dashboard?month=" + state.adminMonth);
+    fillDaySelect(state.adminMonth, state.adminDay);
+    var data = await api(
+      "/api/admin/dashboard?month=" +
+        encodeURIComponent(state.adminMonth) +
+        "&date=" +
+        encodeURIComponent(state.adminDay || "")
+    );
+    if (data.date) {
+      state.adminDay = data.date;
+      if ($("a01-day").value !== data.date) {
+        fillDaySelect(state.adminMonth, data.date);
+      }
+    }
+    state.dashboardLists = data.lists || {};
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
     $("kpi-missing").textContent = data.kpi.missing + "人";
-    $("kpi-break").textContent = data.kpi.break_short + "件";
+    $("kpi-break").textContent = data.kpi.break_short + "人";
+  }
+
+  var KPI_TITLES = {
+    unsubmitted: "未提出の社員",
+    pending: "承認待ちの社員",
+    missing: "未入力の社員",
+    break_short: "休憩不足の社員"
+  };
+
+  function showKpiDetail(kind) {
+    var panel = $("a01-kpi-detail");
+    var list = $("a01-kpi-detail-list");
+    var title = $("a01-kpi-detail-title");
+    var rows = (state.dashboardLists && state.dashboardLists[kind]) || [];
+    var label = KPI_TITLES[kind] || kind;
+    if (kind === "missing" || kind === "break_short") {
+      label += "（" + formatDisplayDate(state.adminDay) + "）";
+    } else {
+      label += "（" + monthLabel(state.adminMonth) + "）";
+    }
+    title.textContent = label;
+    list.innerHTML = "";
+    if (!rows.length) {
+      var empty = document.createElement("li");
+      empty.className = "kpi-detail-empty";
+      empty.textContent = "該当する社員はいません";
+      list.appendChild(empty);
+    } else {
+      rows.forEach(function (e) {
+        var li = document.createElement("li");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "linkish kpi-emp-link";
+        btn.textContent = e.name + "（" + e.emp_no + "）";
+        btn.addEventListener("click", function () {
+          state.detailEmp = e.emp_no;
+          showScreen("a03");
+        });
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+    }
+    panel.classList.remove("is-hidden");
   }
 
   async function refreshDetail(empNo) {
@@ -260,13 +395,16 @@
       var tr = document.createElement("tr");
       if (d.status_kind === "missing") tr.className = "is-missing-row";
       if (d.status_kind === "break") tr.className = "is-break-row";
+      if (d.status_kind === "holiday") tr.className = "is-holiday-row";
       tr.dataset.workDate = d.work_date;
       var statusClass =
         d.status_kind === "ok"
           ? "is-ok"
           : d.status_kind === "break"
             ? "is-break"
-            : "is-missing";
+            : d.status_kind === "holiday"
+              ? "is-leave"
+              : "is-missing";
       var md = d.work_date.slice(5).replace("-", "/");
       if (md.charAt(0) === "0") md = md.slice(1);
       tr.innerHTML =
@@ -590,9 +728,54 @@
     withError(refreshEmpMonth)();
   });
 
+  $("btn-e02-save").addEventListener(
+    "click",
+    withError(async function () {
+      var reason = $("e02-reason");
+      if (!reason.value.trim()) {
+        alert("修正保存には理由が必要です");
+        return;
+      }
+      var days = [];
+      $("e02-body").querySelectorAll("tr").forEach(function (tr) {
+        days.push({
+          work_date: tr.dataset.workDate,
+          clock_in: tr.querySelector(".e02-in").value,
+          clock_out: tr.querySelector(".e02-out").value,
+          break_minutes: tr.querySelector(".e02-br").value || 0
+        });
+      });
+      await api("/api/employee/save-days", {
+        method: "POST",
+        body: JSON.stringify({
+          month: state.empMonth,
+          reason: reason.value.trim(),
+          days: days
+        })
+      });
+      alert("修正を保存しました");
+      refreshEmpMonth();
+    })
+  );
+
   $("a01-month").addEventListener("change", function () {
     state.adminMonth = $("a01-month").value;
+    state.adminDay = null;
+    $("a01-kpi-detail").classList.add("is-hidden");
     withError(refreshDashboard)();
+  });
+  $("a01-day").addEventListener("change", function () {
+    state.adminDay = $("a01-day").value;
+    $("a01-kpi-detail").classList.add("is-hidden");
+    withError(refreshDashboard)();
+  });
+  document.querySelectorAll("[data-kpi]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      showKpiDetail(el.dataset.kpi);
+    });
+  });
+  $("a01-kpi-detail-close").addEventListener("click", function () {
+    $("a01-kpi-detail").classList.add("is-hidden");
   });
 
   ["a04-date", "a04-emp", "a04-changer"].forEach(function (id) {
