@@ -11,87 +11,58 @@
     <div class="dev-top">
       <div>
         <strong>勤怠システム</strong>
-        <span class="dev-note" id="session-label">未ログイン</span>
+        <span class="dev-note" id="session-label">パソコン表示</span>
       </div>
     </div>
     <nav class="screen-nav" aria-label="画面切替" id="main-nav">
-      <button type="button" class="nav-btn is-active" data-screen="login">ログイン</button>
-      <button type="button" class="nav-btn emp-only is-hidden" data-screen="e01">E-01 打刻</button>
-      <button type="button" class="nav-btn emp-only is-hidden" data-screen="e02">E-02 月次一覧</button>
-      <button type="button" class="nav-btn admin-only is-hidden" data-screen="a01">A-01 ダッシュボード</button>
-      <button type="button" class="nav-btn admin-only is-hidden" data-screen="a02">A-02 勤怠一覧</button>
-      <button type="button" class="nav-btn admin-only is-hidden" data-screen="a03">A-03 勤怠詳細</button>
-      <button type="button" class="nav-btn admin-only is-hidden" data-screen="a04">A-04 変更履歴</button>
-      <button type="button" class="nav-btn admin-only is-hidden" data-screen="a05">A-05 社員管理</button>
+      <button type="button" class="nav-btn is-active" data-screen="e01">E-01 打刻</button>
+      <button type="button" class="nav-btn" data-screen="e02">E-02 月次一覧</button>
+      <button type="button" class="nav-btn" data-screen="a01">A-01 ダッシュボード</button>
+      <button type="button" class="nav-btn" data-screen="a03">A-03 勤怠詳細</button>
+      <button type="button" class="nav-btn" data-screen="a04">A-04 変更履歴</button>
+      <button type="button" class="nav-btn" data-screen="a05">A-05 社員管理</button>
     </nav>
   </header>
 
   <main class="stage">
-    <!-- ログイン -->
-    <section id="login" class="screen is-visible" aria-label="ログイン">
-      <div class="phone">
-        <div class="app-header"><h1>勤怠システム</h1></div>
-        <div class="card">
-          <h2 class="card-title">社員ログイン</h2>
-          <label class="field-label" for="login-emp">社員番号（4桁）</label>
-          <div class="row">
-            <input id="login-emp" class="input" type="text" maxlength="4" inputmode="numeric" placeholder="1001" />
-            <button type="button" class="btn btn-primary" id="btn-emp-login">入る</button>
-          </div>
-          <p class="hint">初期社員: 1001 / 1002 / 1003</p>
-        </div>
-        <div class="card">
-          <h2 class="card-title">管理者ログイン</h2>
-          <label class="field-label" for="login-admin-pass">パスワード</label>
-          <div class="row">
-            <input id="login-admin-pass" class="input" type="password" placeholder="パスワード" />
-            <button type="button" class="btn btn-secondary" id="btn-admin-login">入る</button>
-          </div>
-          <p class="hint">初期パスワード: admin123</p>
-          <details class="mt">
-            <summary>パスワードを忘れた（リセット）</summary>
-            <label class="field-label" for="reset-code">リセットコード</label>
-            <input id="reset-code" class="input mb" type="text" placeholder="READMEのコード" />
-            <label class="field-label" for="reset-new">新しいパスワード</label>
-            <input id="reset-new" class="input mb" type="password" />
-            <button type="button" class="btn btn-warn" id="btn-reset">リセットする</button>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <!-- E-01 -->
-    <section id="e01" class="screen" aria-label="ホーム／打刻">
+    <!-- E-01 ホーム／打刻 -->
+    <section id="e01" class="screen is-visible" aria-label="ホーム／打刻">
       <div class="phone">
         <div class="app-header">
           <h1>勤怠システム（社員）</h1>
           <div class="header-links">
             <button type="button" class="linkish" data-goto="e02">月次一覧</button>
-            <button type="button" class="linkish" id="btn-open-submit">提出</button>
-            <button type="button" class="linkish" id="btn-emp-logout">ログアウト</button>
+            <button type="button" class="linkish" data-action="submit">提出</button>
           </div>
         </div>
+
         <div class="card">
+          <label class="field-label" for="emp-id">社員番号</label>
+          <div class="row">
+            <input id="emp-id" class="input" type="text" maxlength="4" inputmode="numeric" value="1001" />
+            <button type="button" class="btn btn-secondary" id="btn-emp-confirm">確認</button>
+          </div>
           <p class="identity" id="e01-identity">氏名：—　番号：—</p>
         </div>
+
         <div class="card">
           <h2 class="card-title" id="e01-today-title">本日</h2>
           <div class="punch-grid punch-grid-pair">
             <div class="punch-slot">
-              <button type="button" id="btn-work" class="btn btn-punch btn-in">出勤</button>
+              <button type="button" id="btn-work" class="btn btn-punch btn-in" data-action="work">出勤</button>
             </div>
             <div class="punch-slot">
-              <button type="button" id="btn-break" class="btn btn-punch btn-break" disabled>休憩開始</button>
+              <button type="button" id="btn-break" class="btn btn-punch btn-break" data-action="break" disabled>休憩開始</button>
             </div>
           </div>
-          <p class="meta" id="e01-times">出勤 — / 退勤 — / 休憩 —分 / 残業 —分</p>
         </div>
+
         <div id="alert-missing" class="alert alert-warn is-hidden">⚠ 未入力：退勤未</div>
-        <div id="alert-break" class="alert alert-danger is-hidden">⚠ 休憩不足</div>
+        <div id="alert-break" class="alert alert-danger is-hidden">⚠ 休憩不足：必要60分／実績40分／不足20分</div>
       </div>
     </section>
 
-    <!-- E-02 -->
+    <!-- E-02 月次一覧 -->
     <section id="e02" class="screen" aria-label="月次一覧">
       <div class="phone phone-wide">
         <div class="app-header">
@@ -116,12 +87,11 @@
       </div>
     </section>
 
-    <!-- A-01 -->
+    <!-- A-01 ダッシュボード -->
     <section id="a01" class="screen" aria-label="ダッシュボード">
       <div class="phone phone-wide">
         <div class="app-header">
           <h1>管理者ダッシュボード</h1>
-          <button type="button" class="linkish" id="btn-admin-logout">ログアウト</button>
         </div>
         <div class="month-row">
           <label class="field-label" for="a01-month">対象月</label>
@@ -134,55 +104,27 @@
           <div class="kpi kpi-alert"><span class="kpi-label">休憩不足</span><span class="kpi-value" id="kpi-break">—</span></div>
         </div>
         <div class="action-row action-row-full">
-          <button type="button" class="btn btn-secondary" data-goto="a02">勤怠一覧</button>
-          <button type="button" class="btn btn-secondary" data-goto="a04">変更履歴</button>
           <button type="button" class="btn btn-secondary" data-goto="a05">社員管理</button>
+          <button type="button" class="btn btn-secondary" data-goto="a04">変更履歴</button>
           <button type="button" class="btn btn-secondary" id="btn-csv">CSV出力</button>
         </div>
       </div>
     </section>
 
-    <!-- A-02 -->
-    <section id="a02" class="screen" aria-label="勤怠一覧">
-      <div class="phone phone-wide">
-        <div class="app-header">
-          <h1 id="a02-title">勤怠一覧</h1>
-          <button type="button" class="linkish" data-goto="a01">ダッシュボード</button>
-        </div>
-        <div class="filter-row">
-          <select id="a02-filter" class="input" aria-label="ステータスフィルタ">
-            <option value="">すべて</option>
-            <option>未提出</option>
-            <option>提出済み</option>
-            <option>承認済み</option>
-            <option>差戻し</option>
-            <option>休憩不足</option>
-          </select>
-          <input id="a02-search" class="input" type="search" placeholder="社員番号" />
-        </div>
-        <div class="table-wrap">
-          <table class="data-table clickable">
-            <thead>
-              <tr><th>社員</th><th>日</th><th>出勤</th><th>退勤</th><th>休憩</th><th>状態</th></tr>
-            </thead>
-            <tbody id="a02-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- A-03 -->
+    <!-- A-03 勤怠詳細（月次） -->
     <section id="a03" class="screen" aria-label="勤怠詳細">
       <div class="phone phone-wide a03-sheet">
         <div class="app-header a03-top">
           <h1>勤怠詳細</h1>
-          <button type="button" class="linkish a03-back" data-goto="a02">勤怠一覧</button>
+          <button type="button" class="linkish a03-back" data-goto="a05">社員管理</button>
         </div>
+
         <div class="a03-meta-row">
           <span class="a03-month" id="a03-month">—</span>
           <span class="a03-employee" id="a03-employee">—</span>
-          <span class="badge" id="a03-badge">—</span>
+          <span class="badge badge-ok" id="a03-badge">—</span>
         </div>
+
         <div class="a03-summary">
           <div class="a03-summary-item">
             <span class="a03-summary-label">総労働時間</span>
@@ -193,44 +135,60 @@
             <span class="a03-summary-value" id="a03-ot">—<span class="a03-unit">h</span></span>
           </div>
         </div>
+
         <div class="a03-table-wrap">
           <table class="a03-table">
             <thead>
-              <tr><th>日付</th><th>曜日</th><th>出勤</th><th>退勤</th><th>休憩</th><th>状態</th></tr>
+              <tr>
+                <th>日付</th>
+                <th>曜日</th>
+                <th>出勤</th>
+                <th>退勤</th>
+                <th>休憩</th>
+                <th>状態</th>
+              </tr>
             </thead>
             <tbody id="a03-body"></tbody>
           </table>
         </div>
+
         <div class="a03-actions-block">
           <label class="field-label" for="a03-reason">差戻し／修正の理由</label>
           <input id="a03-reason" class="input" type="text" placeholder="理由を入力（差戻し・修正時は必須）" />
           <div class="action-row action-row-full a03-actions">
-            <button type="button" class="btn btn-ok" id="a03-approve">承認</button>
-            <button type="button" class="btn btn-warn" id="a03-reject">差戻し</button>
-            <button type="button" class="btn btn-secondary" id="a03-save">修正して保存</button>
+            <button type="button" class="btn btn-ok" data-action="a03-approve">承認</button>
+            <button type="button" class="btn btn-warn" data-action="a03-reject">差戻し</button>
+            <button type="button" class="btn btn-secondary" data-action="a03-save">修正して保存</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- A-04 -->
+    <!-- A-04 変更履歴 -->
     <section id="a04" class="screen" aria-label="変更履歴">
       <div class="phone phone-wide a04-sheet">
         <div class="app-header a04-toolbar">
           <h1>全体の変更履歴</h1>
           <button type="button" class="linkish" data-goto="a01">ダッシュボード</button>
         </div>
+
         <div class="a04-search-row">
           <input id="a04-date" class="input" type="search" placeholder="日時" />
           <input id="a04-emp" class="input" type="search" placeholder="社員" />
           <input id="a04-changer" class="input" type="search" placeholder="変更者" />
         </div>
+
         <div class="a04-table-wrap">
           <table class="a04-table">
             <thead>
               <tr>
-                <th>日付</th><th>変更者</th><th>対象従業員</th><th>変更項目</th>
-                <th>旧データ</th><th>新データ</th><th>理由／ステータス</th>
+                <th>日付</th>
+                <th>変更者</th>
+                <th>対象従業員</th>
+                <th>変更項目</th>
+                <th>旧データ</th>
+                <th>新データ</th>
+                <th>理由／ステータス</th>
               </tr>
             </thead>
             <tbody id="a04-body"></tbody>
@@ -239,7 +197,7 @@
       </div>
     </section>
 
-    <!-- A-05 社員管理 -->
+    <!-- A-05 社員管理（機能用・見た目は同じ部品） -->
     <section id="a05" class="screen" aria-label="社員管理">
       <div class="phone phone-wide">
         <div class="app-header">
@@ -247,9 +205,9 @@
           <button type="button" class="linkish" data-goto="a01">ダッシュボード</button>
         </div>
         <div class="card">
-          <h2 class="card-title">新入社員の追加</h2>
+          <label class="field-label" for="new-emp-no">新入社員の追加</label>
           <div class="row">
-            <input id="new-emp-no" class="input" type="text" maxlength="4" placeholder="社員番号4桁" />
+            <input id="new-emp-no" class="input" type="text" maxlength="4" placeholder="社員番号" />
             <input id="new-emp-name" class="input" type="text" placeholder="氏名" />
             <button type="button" class="btn btn-primary" id="btn-add-emp">追加</button>
           </div>
@@ -264,16 +222,39 @@
     </section>
   </main>
 
-  <div id="submit-modal" class="modal is-hidden" role="dialog" aria-modal="true">
+  <!-- 提出チェック用ポップアップ（旧E-03） -->
+  <div id="submit-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="submit-modal-title">
     <div class="modal-backdrop" data-action="close-modal"></div>
     <div class="modal-panel">
-      <h2 class="card-title">提出前チェック</h2>
+      <h2 id="submit-modal-title" class="card-title">提出前チェック</h2>
       <ul class="checklist" id="submit-checklist"></ul>
-      <p class="meta" id="submit-status-line">現在ステータス：—</p>
+      <p class="meta" id="submit-status-line">現在ステータス：未提出</p>
       <p class="hint" id="submit-hint"></p>
       <div class="action-row modal-actions">
         <button type="button" class="btn btn-secondary" data-action="close-modal">閉じる</button>
         <button type="button" class="btn btn-primary" id="btn-do-submit" disabled>提出する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理者ログイン（mockup同系のモーダル） -->
+  <div id="admin-modal" class="modal is-hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-action="close-admin-modal"></div>
+    <div class="modal-panel">
+      <h2 class="card-title">管理者ログイン</h2>
+      <label class="field-label" for="login-admin-pass">パスワード</label>
+      <input id="login-admin-pass" class="input mb" type="password" placeholder="パスワード" />
+      <details class="mb">
+        <summary class="hint">パスワードを忘れた</summary>
+        <label class="field-label" for="reset-code">リセットコード</label>
+        <input id="reset-code" class="input mb" type="text" />
+        <label class="field-label" for="reset-new">新しいパスワード</label>
+        <input id="reset-new" class="input mb" type="password" />
+        <button type="button" class="btn btn-warn mb" id="btn-reset">リセットする</button>
+      </details>
+      <div class="action-row modal-actions">
+        <button type="button" class="btn btn-secondary" data-action="close-admin-modal">閉じる</button>
+        <button type="button" class="btn btn-primary" id="btn-admin-login">入る</button>
       </div>
     </div>
   </div>

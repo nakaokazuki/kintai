@@ -5,7 +5,8 @@
     today: null,
     empMonth: null,
     adminMonth: null,
-    detailEmp: null
+    detailEmp: null,
+    pendingAdminScreen: null
   };
 
   function $(id) {
@@ -19,6 +20,13 @@
   function currentMonthKey() {
     var d = new Date();
     return d.getFullYear() + "-" + pad(d.getMonth() + 1);
+  }
+
+  /** デモデータ（2026年4月）を優先表示 */
+  var DEMO_MONTH = "2026-04";
+
+  function defaultMonthKey() {
+    return DEMO_MONTH;
   }
 
   function shiftMonth(ym, delta) {
@@ -57,7 +65,42 @@
     return data.data;
   }
 
+  function withError(fn) {
+    return async function () {
+      try {
+        await fn.apply(null, arguments);
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    };
+  }
+
+  function setSessionLabel() {
+    var label = $("session-label");
+    if (state.role === "employee" && state.emp) {
+      label.textContent = state.emp.name + "（" + state.emp.emp_no + "）";
+    } else if (state.role === "admin") {
+      label.textContent = "管理者";
+    } else {
+      label.textContent = "パソコン表示";
+    }
+  }
+
+  function isAdminScreen(id) {
+    return ["a01", "a03", "a04", "a05"].indexOf(id) >= 0;
+  }
+
   function showScreen(id) {
+    if (isAdminScreen(id) && state.role !== "admin") {
+      state.pendingAdminScreen = id;
+      openAdminModal();
+      return;
+    }
+    if ((id === "e02" || id === "e01") && !state.emp && id === "e02") {
+      alert("先に社員番号を確認してください");
+      id = "e01";
+    }
+
     document.querySelectorAll(".screen").forEach(function (el) {
       el.classList.toggle("is-visible", el.id === id);
     });
@@ -65,36 +108,26 @@
       btn.classList.toggle("is-active", btn.dataset.screen === id);
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
-    if (id === "e01") refreshToday();
+
+    if (id === "e01" && state.emp) refreshToday();
     if (id === "e02") refreshEmpMonth();
     if (id === "a01") refreshDashboard();
-    if (id === "a02") refreshAdminList();
-    if (id === "a03" && state.detailEmp) refreshDetail(state.detailEmp);
+    if (id === "a03") {
+      if (state.detailEmp) refreshDetail(state.detailEmp);
+      /* 社員未選択時は空のまま（A-05の氏名クリックで遷移） */
+    }
     if (id === "a04") refreshLogs();
     if (id === "a05") refreshEmployees();
-  }
-
-  function setRoleUI() {
-    var label = $("session-label");
-    document.querySelectorAll(".emp-only").forEach(function (el) {
-      el.classList.toggle("is-hidden", state.role !== "employee");
-    });
-    document.querySelectorAll(".admin-only").forEach(function (el) {
-      el.classList.toggle("is-hidden", state.role !== "admin");
-    });
-    if (state.role === "employee" && state.emp) {
-      label.textContent = state.emp.name + "（" + state.emp.emp_no + "）";
-    } else if (state.role === "admin") {
-      label.textContent = "管理者";
-    } else {
-      label.textContent = "未ログイン";
-    }
   }
 
   function updatePunchButtons(today) {
     var work = $("btn-work");
     var br = $("btn-break");
-    if (!today) return;
+    if (!today) {
+      work.disabled = true;
+      br.disabled = true;
+      return;
+    }
     if (!today.clock_in) {
       work.textContent = "出勤";
       work.className = "btn btn-punch btn-in";
@@ -123,23 +156,9 @@
       br.className = "btn btn-punch btn-secondary";
     }
 
-    $("e01-times").textContent =
-      "出勤 " +
-      (today.clock_in || "—") +
-      " / 退勤 " +
-      (today.clock_out || "—") +
-      " / 休憩 " +
-      today.break_minutes +
-      "分 / 残業 " +
-      today.overtime_minutes +
-      "分";
-
     var missing = $("alert-missing");
     var breakAlert = $("alert-break");
-    missing.classList.toggle(
-      "is-hidden",
-      !(today.clock_in && !today.clock_out)
-    );
+    missing.classList.toggle("is-hidden", !(today.clock_in && !today.clock_out));
     if (today.break_short) {
       breakAlert.classList.remove("is-hidden");
       breakAlert.textContent =
@@ -156,7 +175,7 @@
   }
 
   async function refreshToday() {
-    if (state.role !== "employee") return;
+    if (!state.emp) return;
     var data = await api("/api/employee/today");
     state.today = data.today;
     $("e01-identity").textContent =
@@ -166,7 +185,12 @@
   }
 
   async function refreshEmpMonth() {
-    if (!state.empMonth) state.empMonth = currentMonthKey();
+    if (!state.emp) {
+      alert("先に社員番号を確認してください");
+      showScreen("e01");
+      return;
+    }
+    if (!state.empMonth) state.empMonth = defaultMonthKey();
     var data = await api("/api/employee/month?month=" + state.empMonth);
     $("e02-title").textContent = "月次一覧　" + monthLabel(state.empMonth);
     $("e02-status").textContent = data.submission.status;
@@ -176,6 +200,7 @@
       var tr = document.createElement("tr");
       if (d.status_kind === "missing") tr.className = "row-missing";
       if (d.status_kind === "break") tr.className = "row-break";
+      var statusText = d.status === "休憩不足" ? "休不足" : d.status;
       tr.innerHTML =
         "<td>" +
         d.day +
@@ -188,7 +213,7 @@
         "</td><td>" +
         (d.clock_out ? d.overtime_minutes : "—") +
         "</td><td>" +
-        d.status +
+        statusText +
         "</td>";
       body.appendChild(tr);
     });
@@ -197,69 +222,29 @@
   function fillMonthSelect(selectId, selected) {
     var sel = $(selectId);
     sel.innerHTML = "";
-    var base = new Date();
-    for (var i = -3; i <= 3; i++) {
-      var ym = shiftMonth(
-        base.getFullYear() + "-" + pad(base.getMonth() + 1),
-        i
-      );
+    var end = shiftMonth(currentMonthKey(), 1);
+    var cursor = "2026-01";
+    var guard = 0;
+    while (guard < 48) {
       var opt = document.createElement("option");
-      opt.value = ym;
-      opt.textContent = monthLabel(ym);
-      if (ym === selected) opt.selected = true;
+      opt.value = cursor;
+      opt.textContent = monthLabel(cursor);
+      if (cursor === selected) opt.selected = true;
       sel.appendChild(opt);
+      if (cursor === end) break;
+      cursor = shiftMonth(cursor, 1);
+      guard += 1;
     }
   }
 
   async function refreshDashboard() {
-    if (!state.adminMonth) state.adminMonth = currentMonthKey();
+    if (!state.adminMonth) state.adminMonth = defaultMonthKey();
     fillMonthSelect("a01-month", state.adminMonth);
     var data = await api("/api/admin/dashboard?month=" + state.adminMonth);
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
     $("kpi-review").textContent = data.kpi.review + "件";
     $("kpi-break").textContent = data.kpi.break_short + "件";
-  }
-
-  async function refreshAdminList() {
-    if (!state.adminMonth) state.adminMonth = currentMonthKey();
-    $("a02-title").textContent = "勤怠一覧　" + monthLabel(state.adminMonth);
-    var q =
-      "/api/admin/list?month=" +
-      encodeURIComponent(state.adminMonth) +
-      "&status=" +
-      encodeURIComponent($("a02-filter").value || "") +
-      "&emp_no=" +
-      encodeURIComponent($("a02-search").value || "");
-    var data = await api(q);
-    var body = $("a02-body");
-    body.innerHTML = "";
-    data.rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      if (r.status_kind === "break") tr.className = "row-break";
-      if (r.status_kind === "missing") tr.className = "row-missing";
-      tr.innerHTML =
-        "<td>" +
-        r.emp_no +
-        " " +
-        r.name +
-        "</td><td>" +
-        r.day +
-        "</td><td>" +
-        r.clock_in +
-        "</td><td>" +
-        r.clock_out +
-        "</td><td>" +
-        r.break_minutes +
-        "</td><td>" +
-        r.status +
-        "</td>";
-      tr.addEventListener("click", function () {
-        state.detailEmp = r.emp_no;
-        showScreen("a03");
-      });
-      body.appendChild(tr);
-    });
   }
 
   async function refreshDetail(empNo) {
@@ -271,8 +256,12 @@
     );
     $("a03-month").textContent = monthLabel(data.month);
     $("a03-employee").textContent =
-      data.employee.name + "（" + data.employee.emp_no + "）";
+      data.employee.name.replace(/\s/g, "") + "（" + data.employee.emp_no + "）";
     $("a03-badge").textContent = data.submission.status;
+    $("a03-badge").className =
+      data.submission.status === "承認済み" || data.submission.status === "提出済み"
+        ? "badge badge-ok"
+        : "badge";
     $("a03-work").innerHTML =
       data.summary.work_hours + '<span class="a03-unit">h</span>';
     $("a03-ot").innerHTML =
@@ -290,18 +279,20 @@
           : d.status_kind === "break"
             ? "is-break"
             : "is-missing";
+      var md = d.work_date.slice(5).replace("-", "/");
+      if (md.charAt(0) === "0") md = md.slice(1);
       tr.innerHTML =
         "<td>" +
-        d.day +
+        md +
         "</td><td>" +
         d.weekday +
         '</td><td><input class="a03-cell a03-in" value="' +
         (d.clock_in || "") +
-        '" /></td><td><input class="a03-cell a03-out" value="' +
+        '" placeholder="—" /></td><td><input class="a03-cell a03-out" value="' +
         (d.clock_out || "") +
-        '" /></td><td><input class="a03-cell a03-br" value="' +
-        d.break_minutes +
-        '" /></td><td><span class="a03-status ' +
+        '" placeholder="—" /></td><td><input class="a03-cell a03-br" value="' +
+        (d.clock_in || d.clock_out ? d.break_minutes : "") +
+        '" placeholder="—" /></td><td><span class="a03-status ' +
         statusClass +
         '">' +
         d.status +
@@ -324,9 +315,11 @@
     body.innerHTML = "";
     data.rows.forEach(function (r) {
       var tr = document.createElement("tr");
+      var day = r.created_at.replace("T", " ").slice(0, 10).replace(/-/g, "/");
+      day = day.replace(/\/0/g, "/").replace(/^0/, "");
       tr.innerHTML =
         "<td>" +
-        r.created_at.replace("T", " ").slice(0, 16) +
+        day +
         "</td><td>" +
         r.changer +
         "</td><td>" +
@@ -350,48 +343,67 @@
     body.innerHTML = "";
     data.employees.forEach(function (e) {
       var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" +
-        e.emp_no +
-        "</td><td>" +
-        e.name +
-        "</td><td>" +
-        (e.active ? "有効" : "無効") +
-        "</td><td></td>";
+      var tdNo = document.createElement("td");
+      tdNo.textContent = e.emp_no;
+      var tdName = document.createElement("td");
+      var nameBtn = document.createElement("button");
+      nameBtn.type = "button";
+      nameBtn.className = "linkish emp-name-link";
+      nameBtn.textContent = e.name;
+      nameBtn.addEventListener("click", function () {
+        state.detailEmp = e.emp_no;
+        if (!state.adminMonth) state.adminMonth = defaultMonthKey();
+        showScreen("a03");
+      });
+      tdName.appendChild(nameBtn);
+      var tdStatus = document.createElement("td");
+      tdStatus.textContent = e.active ? "有効" : "無効";
+      var tdAction = document.createElement("td");
       if (e.active) {
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn btn-tiny btn-warn";
         btn.textContent = "無効化";
-        btn.addEventListener("click", async function () {
-          if (!confirm(e.emp_no + " を無効化しますか？")) return;
-          await api("/api/admin/employees/" + e.emp_no + "/deactivate", {
-            method: "POST",
-            body: "{}"
-          });
-          refreshEmployees();
-        });
-        tr.lastChild.appendChild(btn);
+        btn.addEventListener(
+          "click",
+          withError(async function () {
+            if (!confirm(e.emp_no + " を無効化しますか？")) return;
+            await api("/api/admin/employees/" + e.emp_no + "/deactivate", {
+              method: "POST",
+              body: "{}"
+            });
+            refreshEmployees();
+          })
+        );
+        tdAction.appendChild(btn);
       }
+      tr.appendChild(tdNo);
+      tr.appendChild(tdName);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdAction);
       body.appendChild(tr);
     });
   }
 
   async function openSubmitModal() {
+    if (!state.emp) {
+      alert("先に社員番号を確認してください");
+      return;
+    }
     var month = state.empMonth || currentMonthKey();
     var data = await api("/api/employee/submit-check?month=" + month);
     var list = $("submit-checklist");
     list.innerHTML = "";
     var li1 = document.createElement("li");
-    li1.className = data.missing_count > 0 ? "bad" : "ok";
-    li1.textContent =
+    li1.className = data.missing_count > 0 ? "bad" : "";
+    li1.innerHTML =
       "未入力：" +
       data.missing_count +
       "件 → " +
-      (data.missing_count > 0 ? "提出不可" : "OK");
+      (data.missing_count > 0 ? "<strong>提出不可</strong>" : "OK");
     list.appendChild(li1);
     var li2 = document.createElement("li");
-    li2.className = data.break_short_count > 0 ? "warn" : "ok";
+    li2.className = data.break_short_count > 0 ? "warn" : "";
     li2.textContent =
       "休憩不足：" +
       data.break_short_count +
@@ -400,12 +412,14 @@
     list.appendChild(li2);
     $("submit-status-line").textContent =
       "現在ステータス：" + data.submission.status;
-    $("submit-hint").textContent = (data.messages || []).join(" / ");
+    $("submit-hint").textContent =
+      data.messages.join("。") ||
+      (data.can_submit ? "問題なければ提出してください。" : "");
     var btn = $("btn-do-submit");
     btn.disabled = !data.can_submit;
     btn.textContent = data.can_submit
       ? "提出する"
-      : "提出する（条件未達）";
+      : "提出する（未入力あり）";
     $("submit-modal").classList.remove("is-hidden");
   }
 
@@ -413,30 +427,29 @@
     $("submit-modal").classList.add("is-hidden");
   }
 
-  function withError(fn) {
-    return async function () {
-      try {
-        await fn.apply(null, arguments);
-      } catch (e) {
-        alert(e.message || String(e));
-      }
-    };
+  function openAdminModal() {
+    $("admin-modal").classList.remove("is-hidden");
   }
 
-  // events
-  $("btn-emp-login").addEventListener(
+  function closeAdminModal() {
+    $("admin-modal").classList.add("is-hidden");
+    state.pendingAdminScreen = null;
+  }
+
+  // --- events ---
+  $("btn-emp-confirm").addEventListener(
     "click",
     withError(async function () {
-      var emp_no = $("login-emp").value.trim();
+      var emp_no = $("emp-id").value.trim();
       var data = await api("/api/employee/login", {
         method: "POST",
         body: JSON.stringify({ emp_no: emp_no })
       });
       state.role = "employee";
       state.emp = data;
-      state.empMonth = currentMonthKey();
-      setRoleUI();
-      showScreen("e01");
+      state.empMonth = defaultMonthKey();
+      setSessionLabel();
+      await refreshToday();
     })
   );
 
@@ -448,9 +461,12 @@
         body: JSON.stringify({ password: $("login-admin-pass").value })
       });
       state.role = "admin";
-      state.adminMonth = currentMonthKey();
-      setRoleUI();
-      showScreen("a01");
+      state.adminMonth = defaultMonthKey();
+      setSessionLabel();
+      var next = state.pendingAdminScreen || "a01";
+      $("admin-modal").classList.add("is-hidden");
+      state.pendingAdminScreen = null;
+      showScreen(next);
     })
   );
 
@@ -464,67 +480,105 @@
           new_password: $("reset-new").value
         })
       });
-      alert("パスワードをリセットしました。新しいパスワードでログインしてください。");
+      alert("パスワードをリセットしました");
     })
   );
 
-  $("btn-emp-logout").addEventListener(
-    "click",
-    withError(async function () {
-      await api("/api/employee/logout", { method: "POST", body: "{}" });
-      state.role = null;
-      state.emp = null;
-      setRoleUI();
-      showScreen("login");
-    })
-  );
-
-  $("btn-admin-logout").addEventListener(
-    "click",
-    withError(async function () {
-      await api("/api/admin/logout", { method: "POST", body: "{}" });
-      state.role = null;
-      setRoleUI();
-      showScreen("login");
-    })
-  );
-
-  $("btn-work").addEventListener(
-    "click",
-    withError(async function () {
-      var today = state.today || {};
-      var action = !today.clock_in
-        ? "clock_in"
-        : !today.clock_out
-          ? "clock_out"
-          : null;
-      if (!action) return;
-      var data = await api("/api/employee/punch", {
-        method: "POST",
-        body: JSON.stringify({ action: action })
-      });
-      state.today = data.today;
-      updatePunchButtons(data.today);
-    })
-  );
-
-  $("btn-break").addEventListener(
-    "click",
-    withError(async function () {
-      var today = state.today || {};
-      var action = today.on_break ? "break_end" : "break_start";
-      var data = await api("/api/employee/punch", {
-        method: "POST",
-        body: JSON.stringify({ action: action })
-      });
-      state.today = data.today;
-      updatePunchButtons(data.today);
-    })
-  );
-
-  $("btn-open-submit").addEventListener("click", withError(openSubmitModal));
-  document.querySelectorAll("[data-action=close-modal]").forEach(function (el) {
-    el.addEventListener("click", closeSubmitModal);
+  document.querySelectorAll("[data-action]").forEach(function (el) {
+    el.addEventListener(
+      "click",
+      withError(async function () {
+        var action = el.dataset.action;
+        if (action === "work") {
+          if (!state.emp) {
+            alert("先に社員番号を確認してください");
+            return;
+          }
+          var today = state.today || {};
+          var punch = !today.clock_in
+            ? "clock_in"
+            : !today.clock_out
+              ? "clock_out"
+              : null;
+          if (!punch) return;
+          var data = await api("/api/employee/punch", {
+            method: "POST",
+            body: JSON.stringify({ action: punch })
+          });
+          state.today = data.today;
+          updatePunchButtons(data.today);
+        }
+        if (action === "break") {
+          if (!state.emp) return;
+          var t = state.today || {};
+          var b = t.on_break ? "break_end" : "break_start";
+          var bd = await api("/api/employee/punch", {
+            method: "POST",
+            body: JSON.stringify({ action: b })
+          });
+          state.today = bd.today;
+          updatePunchButtons(bd.today);
+        }
+        if (action === "submit") openSubmitModal();
+        if (action === "close-modal") closeSubmitModal();
+        if (action === "close-admin-modal") closeAdminModal();
+        if (action === "a03-approve") {
+          await api("/api/admin/approve", {
+            method: "POST",
+            body: JSON.stringify({
+              emp_no: state.detailEmp,
+              month: state.adminMonth
+            })
+          });
+          alert("1ヶ月分を承認しました");
+          refreshDetail(state.detailEmp);
+        }
+        if (action === "a03-reject") {
+          var reasonReject = $("a03-reason");
+          if (!reasonReject.value.trim()) {
+            alert("差戻しには理由が必要です");
+            return;
+          }
+          await api("/api/admin/reject", {
+            method: "POST",
+            body: JSON.stringify({
+              emp_no: state.detailEmp,
+              month: state.adminMonth,
+              reason: reasonReject.value.trim()
+            })
+          });
+          alert("1ヶ月分を差戻しました");
+          refreshDetail(state.detailEmp);
+        }
+        if (action === "a03-save") {
+          var reasonSave = $("a03-reason");
+          if (!reasonSave.value.trim()) {
+            alert("修正保存には理由が必要です");
+            return;
+          }
+          var days = [];
+          $("a03-body").querySelectorAll("tr").forEach(function (tr) {
+            days.push({
+              work_date: tr.dataset.workDate,
+              clock_in: tr.querySelector(".a03-in").value,
+              clock_out: tr.querySelector(".a03-out").value,
+              break_minutes: tr.querySelector(".a03-br").value || 0
+            });
+          });
+          await api("/api/admin/save-days", {
+            method: "POST",
+            body: JSON.stringify({
+              emp_no: state.detailEmp,
+              month: state.adminMonth,
+              reason: reasonSave.value.trim(),
+              days: days
+            })
+          });
+          alert("1ヶ月分の修正を保存しました");
+          refreshDetail(state.detailEmp);
+        }
+      })
+    );
   });
 
   $("btn-do-submit").addEventListener(
@@ -554,8 +608,6 @@
     withError(refreshDashboard)();
   });
 
-  $("a02-filter").addEventListener("change", withError(refreshAdminList));
-  $("a02-search").addEventListener("input", withError(refreshAdminList));
   ["a04-date", "a04-emp", "a04-changer"].forEach(function (id) {
     $(id).addEventListener("input", withError(refreshLogs));
   });
@@ -565,73 +617,6 @@
       "/api/admin/csv?month=" +
       encodeURIComponent(state.adminMonth || currentMonthKey());
   });
-
-  $("a03-approve").addEventListener(
-    "click",
-    withError(async function () {
-      await api("/api/admin/approve", {
-        method: "POST",
-        body: JSON.stringify({
-          emp_no: state.detailEmp,
-          month: state.adminMonth
-        })
-      });
-      alert("承認しました");
-      refreshDetail(state.detailEmp);
-    })
-  );
-
-  $("a03-reject").addEventListener(
-    "click",
-    withError(async function () {
-      var reason = $("a03-reason").value.trim();
-      if (!reason) {
-        alert("差戻しには理由が必要です");
-        return;
-      }
-      await api("/api/admin/reject", {
-        method: "POST",
-        body: JSON.stringify({
-          emp_no: state.detailEmp,
-          month: state.adminMonth,
-          reason: reason
-        })
-      });
-      alert("差戻しました");
-      refreshDetail(state.detailEmp);
-    })
-  );
-
-  $("a03-save").addEventListener(
-    "click",
-    withError(async function () {
-      var reason = $("a03-reason").value.trim();
-      if (!reason) {
-        alert("修正保存には理由が必要です");
-        return;
-      }
-      var days = [];
-      $("a03-body").querySelectorAll("tr").forEach(function (tr) {
-        days.push({
-          work_date: tr.dataset.workDate,
-          clock_in: tr.querySelector(".a03-in").value,
-          clock_out: tr.querySelector(".a03-out").value,
-          break_minutes: tr.querySelector(".a03-br").value
-        });
-      });
-      await api("/api/admin/save-days", {
-        method: "POST",
-        body: JSON.stringify({
-          emp_no: state.detailEmp,
-          month: state.adminMonth,
-          reason: reason,
-          days: days
-        })
-      });
-      alert("保存しました");
-      refreshDetail(state.detailEmp);
-    })
-  );
 
   $("btn-add-emp").addEventListener(
     "click",
@@ -661,27 +646,31 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeSubmitModal();
+    if (e.key === "Escape") {
+      closeSubmitModal();
+      closeAdminModal();
+    }
   });
 
-  // restore session
+  updatePunchButtons(null);
+
   withError(async function () {
     try {
       var me = await api("/api/employee/me");
       state.role = "employee";
       state.emp = me;
-      state.empMonth = currentMonthKey();
-      setRoleUI();
-      showScreen("e01");
+      state.empMonth = defaultMonthKey();
+      $("emp-id").value = me.emp_no;
+      setSessionLabel();
+      await refreshToday();
       return;
     } catch (e) {}
     try {
       var adm = await api("/api/admin/me");
       if (adm.admin) {
         state.role = "admin";
-        state.adminMonth = currentMonthKey();
-        setRoleUI();
-        showScreen("a01");
+        state.adminMonth = defaultMonthKey();
+        setSessionLabel();
       }
     } catch (e2) {}
   })();

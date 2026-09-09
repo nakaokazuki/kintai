@@ -287,16 +287,6 @@ select {
   width: 100%;
 }
 
-.mt {
-  margin-top: 12px;
-}
-
-details.mt summary {
-  cursor: pointer;
-  color: var(--primary);
-  margin-bottom: 8px;
-}
-
 .is-hidden {
   display: none !important;
 }
@@ -663,7 +653,13 @@ details.mt summary {
   font-weight: 800;
 }
 
-/* ---- A-03 月次詳細（A-02と同じ色基調） ---- */
+/* ---- A-05 社員名リンク ---- */
+.emp-name-link {
+  font: inherit;
+  padding: 0;
+}
+
+/* ---- A-03 月次詳細 ---- */
 .a03-sheet {
   background: var(--surface);
   border: 1px solid var(--line);

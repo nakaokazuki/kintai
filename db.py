@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
 DB_PATH = Path(os.environ.get("DATABASE_PATH", DATA_DIR / "kintai.db"))
 
-DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "7777")
 RESET_CODE = os.environ.get("ADMIN_RESET_CODE", "RESET-KINTAI-2026")
 
 
@@ -85,10 +85,11 @@ def init_db() -> None:
             from logic import now_tokyo
 
             now = now_tokyo().isoformat(timespec="seconds")
+            # デモ社員は seed/import_demo.py で投入。空のときだけ最小セット。
             seed = [
-                ("1001", "山田 太郎"),
-                ("1002", "佐藤 花子"),
-                ("1003", "鈴木 一郎"),
+                ("1001", "佐藤 太郎"),
+                ("1002", "鈴木 美咲"),
+                ("1003", "高橋 優"),
             ]
             conn.executemany(
                 "INSERT INTO employees(emp_no, name, active, created_at) VALUES (?,?,1,?)",
