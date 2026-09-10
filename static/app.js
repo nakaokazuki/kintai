@@ -274,7 +274,7 @@
       withError(function () {
         return withLoading(function () {
           return refreshLogs({ searching: false });
-        }, "検索しています...");
+        }, "検索しています");
       })();
     }
     if (id === "a05") {
@@ -364,7 +364,7 @@
     }
     if (!state.empMonth) state.empMonth = defaultMonthKey();
     var body = $("e02-body");
-    body.innerHTML = "<tr><td colspan=\"6\">読み込み中…</td></tr>";
+    body.innerHTML = "<tr><td colspan=\"6\">読み込み中</td></tr>";
     try {
       var data = await api("/api/employee/month?month=" + state.empMonth);
     } catch (err) {
@@ -769,7 +769,7 @@
     var body = $("a04-body");
     if (searching) {
       body.innerHTML =
-        '<tr><td colspan="7">検索しています...</td></tr>';
+        '<tr><td colspan="7">検索しています</td></tr>';
     }
     var q =
       "/api/admin/logs?date=" +
@@ -858,7 +858,7 @@
                 body: "{}"
               });
               await refreshEmployees();
-            }, "無効化しています…");
+            }, "無効化しています");
           })
         );
         tdAction.appendChild(btn);
@@ -879,7 +879,7 @@
     var month = state.empMonth || currentMonthKey();
     var data = await withLoading(function () {
       return api("/api/employee/submit-check?month=" + month);
-    }, "提出前チェックを読み込んでいます…");
+    }, "提出前チェックを読み込んでいます");
     var list = $("submit-checklist");
     list.innerHTML = "";
     var li1 = document.createElement("li");
@@ -935,7 +935,7 @@
         return;
       }
       state.empBusy = true;
-      showLoading("社員情報を確認しています…");
+      showLoading("社員情報を確認しています");
       try {
         var data = await api("/api/employee/login", {
           method: "POST",
@@ -968,7 +968,7 @@
           method: "POST",
           body: JSON.stringify({ password: $("login-admin-pass").value })
         });
-      }, "ログインしています…");
+      }, "ログインしています");
       state.role = "admin";
       state.adminMonth = defaultMonthKey();
       updateCsvButtonLabel();
@@ -991,7 +991,7 @@
             new_password: $("reset-new").value
           })
         });
-      }, "パスワードをリセットしています…");
+      }, "パスワードをリセットしています");
       alert("パスワードをリセットしました");
     })
   );
@@ -1067,7 +1067,7 @@
 
   function showPunchSaving(message) {
     showBusy(
-      message || "記録しています…",
+      message || "記録しています",
       ""
     );
   }
@@ -1215,7 +1215,7 @@
               })
             });
             await refreshDetail(state.detailEmp);
-          }, "承認しています…");
+          }, "承認しています");
           alert("1ヶ月分を承認しました");
         }
         if (action === "a03-reject") {
@@ -1234,7 +1234,7 @@
               })
             });
             await refreshDetail(state.detailEmp);
-          }, "差戻しています…");
+          }, "差戻しています");
           reasonReject.value = "";
           alert("1ヶ月分を差戻しました");
         }
@@ -1266,7 +1266,7 @@
               })
             });
             await refreshDetail(state.detailEmp);
-          }, "修正を保存しています…");
+          }, "修正を保存しています");
           reasonSave.value = "";
           alert("1ヶ月分の修正を保存しました");
         }
@@ -1282,7 +1282,7 @@
           method: "POST",
           body: JSON.stringify({ month: state.empMonth || currentMonthKey() })
         });
-      }, "提出しています…");
+      }, "提出しています");
       closeSubmitModal();
       alert("提出しました");
       refreshEmpMonth();
@@ -1327,7 +1327,7 @@
           })
         });
         await refreshEmpMonth();
-      }, "修正を保存しています…");
+      }, "修正を保存しています");
       reason.value = "";
       alert("修正を保存しました");
     })
@@ -1383,7 +1383,7 @@
         $("new-emp-no").value = "";
         $("new-emp-name").value = "";
         await refreshEmployees();
-      }, "社員を追加しています…");
+      }, "社員を追加しています");
     })
   );
 

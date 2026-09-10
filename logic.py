@@ -44,19 +44,33 @@ def can_submit_month(target_year: int, target_month: int, on: Optional[date] = N
 
 
 def parse_hhmm(value: Optional[str]) -> Optional[time]:
-    if not value:
+    if value is None:
         return None
-    value = value.strip()
+    value = str(value).strip()
     if not value or value == "—":
         return None
+    # "0:00" / "00:00" / "0:00:00" などに対応
     parts = value.split(":")
-    if len(parts) != 2:
+    if len(parts) < 2:
         return None
     try:
-        return time(int(parts[0]), int(parts[1]))
+        hour = int(parts[0])
+        minute = int(parts[1])
+        return time(hour, minute)
     except ValueError:
         return None
 
+
+def is_zero_clock_pair(
+    clock_in: Optional[str],
+    clock_out: Optional[str],
+) -> bool:
+    """0:00 / 0:00 の埋戻し日かどうか。"""
+    cin = parse_hhmm(clock_in)
+    cout = parse_hhmm(clock_out)
+    if cin is None or cout is None:
+        return False
+    return cin == time(0, 0) and cout == time(0, 0)
 
 def format_hhmm(t: Optional[time]) -> str:
     if t is None:

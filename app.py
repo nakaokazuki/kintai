@@ -24,6 +24,7 @@ from logic import (
     break_shortage,
     day_status_label,
     format_hhmm,
+    is_zero_clock_pair,
     month_key,
     now_tokyo,
     overtime_minutes,
@@ -130,19 +131,28 @@ def summarize_day_row(row: Optional[Any], work_date: str) -> dict:
         clock_in = ""
         clock_out = ""
     else:
-        cin = parse_hhmm(row["clock_in"])
-        cout = parse_hhmm(row["clock_out"])
+        raw_in = row["clock_in"]
+        raw_out = row["clock_out"]
+        # DBによっては "0:00:00" 形式になることがある
+        clock_in = "" if raw_in is None else str(raw_in).strip()
+        clock_out = "" if raw_out is None else str(raw_out).strip()
+        cin = parse_hhmm(clock_in)
+        cout = parse_hhmm(clock_out)
         br = int(row["break_minutes"] or 0)
         on_break = bool(row["on_break"])
         force_work = bool(row["force_work"]) if "force_work" in row.keys() else False
         leave_type = ""
         if "leave_type" in row.keys() and row["leave_type"]:
             leave_type = str(row["leave_type"])
-        clock_in = row["clock_in"] or ""
-        clock_out = row["clock_out"] or ""
     ot = overtime_minutes(cout)
     work, required, short, is_short = break_shortage(cin, cout, br)
     label, kind = day_status_label(cin, cout, br, on_break)
+    # 0:00/0:00 の埋戻し日は未入力にしない
+    if is_zero_clock_pair(clock_in, clock_out):
+        label, kind = "OK", "ok"
+        is_short = False
+        short = 0
+        on_break = False
     if leave_type in ("有給", "欠勤"):
         label = leave_type
         kind = "leave"
@@ -206,28 +216,53 @@ def format_log_date(iso: str) -> str:
         return day
 
 
+def _parse_ymd(value: str) -> Optional[tuple]:
+    """日付文字列を (year, month, day) に変換。失敗時は None。"""
+    raw = (value or "").strip().replace("T", " ")[:10].replace("-", "/").replace(".", "/")
+    parts = [p for p in raw.split("/") if p != ""]
+    if len(parts) != 3:
+        return None
+    try:
+        return int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
+
+
 def log_date_matches(created_at: str, query: str) -> bool:
-    """画面表記（2026/9/9）や 2026-09-09 などで部分一致検索できるようにする。"""
+    """表示日付に対する検索。'9/9' が '2026/9/10' に誤マッチしないよう月日単位で判定する。"""
     q = (query or "").strip()
     if not q:
         return True
-    raw = (created_at or "").strip()
-    if not raw:
-        return False
-    display = format_log_date(raw)
-    if q in display or q in raw:
-        return True
-    # 2026-09-09 / 2026/09/09 → 2026/9/9 に正規化して部分一致
+    ymd = _parse_ymd(created_at)
+    if not ymd:
+        display = format_log_date(created_at)
+        return q in display
+
+    year, month, day = ymd
+    display = f"{year}/{month}/{day}"
     normalized = q.replace("-", "/").replace(".", "/")
-    pieces = normalized.split("/")
+    pieces = [p for p in normalized.split("/") if p != ""]
     try:
-        norm_parts = [str(int(p)) if p.isdigit() else p for p in pieces if p != ""]
+        nums = [int(p) for p in pieces if p.isdigit()]
     except ValueError:
-        return False
-    if not norm_parts:
-        return False
-    q_norm = "/".join(norm_parts)
-    return q_norm in display or q_norm in raw.replace("-", "/")
+        return q in display
+    # 数字以外だけのクエリは表示文字列の部分一致
+    if len(nums) != len(pieces):
+        return q in display or normalized in display
+
+    if len(nums) == 1:
+        n = nums[0]
+        return n in (year, month, day)
+    if len(nums) == 2:
+        # 9/9 → 月/日、または 2026/9 → 年/月
+        a, b = nums
+        if a >= 1000:
+            return year == a and month == b
+        return month == a and day == b
+    if len(nums) >= 3:
+        y, m, d = nums[0], nums[1], nums[2]
+        return year == y and month == m and day == d
+    return False
 
 
 def text_matches(value: str, query: str) -> bool:
@@ -956,6 +991,11 @@ def admin_dashboard():
         date_out = ""
 
     # 対象期間の勤怠を一括取得（社員×日の個別クエリをやめて高速化）
+    with db.get_conn() as conn:
+        for emp in employees:
+            fill_empty_business_days(conn, emp["emp_no"], range_start, range_end)
+        conn.commit()
+
     att_rows = db.fetchall(
         """SELECT emp_no, work_date, clock_in, clock_out, break_minutes, on_break, force_work, leave_type
            FROM attendance_days
@@ -1226,9 +1266,7 @@ def admin_logs():
         field_name = r["field_name"] or ""
         work_date = r["work_date"] or ""
 
-        if q_date and not (
-            log_date_matches(created, q_date) or log_date_matches(work_date, q_date)
-        ):
+        if q_date and not log_date_matches(created, q_date):
             continue
         if q_emp and not (text_matches(name, q_emp) or text_matches(emp_no, q_emp)):
             continue
