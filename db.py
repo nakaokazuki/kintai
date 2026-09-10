@@ -167,6 +167,7 @@ def _sqlite_schema() -> str:
               break_started_at TEXT,
               overtime_minutes INTEGER NOT NULL DEFAULT 0,
               force_work INTEGER NOT NULL DEFAULT 0,
+              leave_type TEXT NOT NULL DEFAULT '',
               UNIQUE(emp_no, work_date),
               FOREIGN KEY(emp_no) REFERENCES employees(emp_no)
             );
@@ -223,6 +224,7 @@ def _postgres_schema() -> str:
               break_started_at TEXT,
               overtime_minutes INTEGER NOT NULL DEFAULT 0,
               force_work INTEGER NOT NULL DEFAULT 0,
+              leave_type TEXT NOT NULL DEFAULT '',
               UNIQUE(emp_no, work_date)
             );
 
@@ -274,6 +276,12 @@ def init_db(*, skip_auto_seed: bool = False) -> None:
         if not _has_column(conn, "attendance_days", "force_work"):
             conn.execute(
                 "ALTER TABLE attendance_days ADD COLUMN force_work INTEGER NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+
+        if not _has_column(conn, "attendance_days", "leave_type"):
+            conn.execute(
+                "ALTER TABLE attendance_days ADD COLUMN leave_type TEXT NOT NULL DEFAULT ''"
             )
             conn.commit()
 

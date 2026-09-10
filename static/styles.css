@@ -301,6 +301,15 @@ select {
   box-shadow: 0 12px 32px rgba(40, 70, 100, 0.18);
 }
 
+.modal-panel-compact {
+  max-width: 360px;
+  text-align: center;
+}
+
+.modal-panel-compact .card-title {
+  margin-bottom: 8px;
+}
+
 .modal-actions {
   margin-top: 16px;
 }
@@ -485,6 +494,11 @@ select {
 .row-holiday {
   background: #eef2f6;
   color: var(--muted);
+}
+
+.row-leave {
+  background: #eef6ff;
+  color: var(--primary);
 }
 
 .e02-mode,
@@ -845,6 +859,11 @@ select {
 .a03-table tbody tr.is-holiday-row {
   background: #eef2f6;
   color: var(--muted);
+}
+
+.a03-table tbody tr.is-leave-row {
+  background: #eef6ff;
+  color: var(--primary);
 }
 
 .a03-cell {

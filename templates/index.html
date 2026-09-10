@@ -277,6 +277,15 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <!-- 打刻記録中 -->
+  <div id="punch-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="punch-modal-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel modal-panel-compact">
+      <h2 id="punch-modal-title" class="card-title">記録中</h2>
+      <p class="hint" id="punch-modal-msg">サーバに保存しています。完了するまでタブを閉じないでください。</p>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260909empkeep"></script>
 </body>
 </html>

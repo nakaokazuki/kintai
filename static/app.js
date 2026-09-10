@@ -314,6 +314,7 @@
       if (d.status_kind === "missing") tr.className = "row-missing";
       if (d.status_kind === "break") tr.className = "row-break";
       if (d.status_kind === "holiday") tr.className = "row-holiday";
+      if (d.status_kind === "leave") tr.className = "row-leave";
       tr.dataset.workDate = d.work_date;
       tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusText =
@@ -335,10 +336,32 @@
             (mode === "work" ? " selected" : "") +
             ">未入力</option>" +
             "</select>";
+        } else if (d.status_kind === "missing" || d.status_kind === "leave") {
+          var leaveMode =
+            d.day_mode === "paid_leave"
+              ? "paid_leave"
+              : d.day_mode === "absent"
+                ? "absent"
+                : "work";
+          statusCell =
+            '<select class="input e02-mode">' +
+            '<option value="work"' +
+            (leaveMode === "work" ? " selected" : "") +
+            ">未入力</option>" +
+            '<option value="paid_leave"' +
+            (leaveMode === "paid_leave" ? " selected" : "") +
+            ">有給</option>" +
+            '<option value="absent"' +
+            (leaveMode === "absent" ? " selected" : "") +
+            ">欠勤</option>" +
+            "</select>";
         } else {
           statusCell = statusText;
         }
-        var timeDisabled = d.is_holiday && d.day_mode !== "work";
+        var timeDisabled =
+          (d.is_holiday && d.day_mode !== "work") ||
+          d.day_mode === "paid_leave" ||
+          d.day_mode === "absent";
         tr.innerHTML =
           "<td>" +
           formatDisplayDate(d.work_date) +
@@ -376,18 +399,23 @@
           "</td>";
       }
       body.appendChild(tr);
-      if (editable && d.is_holiday) {
+      if (editable) {
         var modeSel = tr.querySelector(".e02-mode");
-        modeSel.addEventListener("change", function () {
-          var disable = modeSel.value === "holiday";
-          tr.classList.toggle("row-holiday", disable);
-          tr.classList.toggle("row-missing", !disable);
-          ["e02-in", "e02-out", "e02-br"].forEach(function (cls) {
-            var inp = tr.querySelector("." + cls);
-            inp.disabled = disable;
-            if (disable) inp.value = "";
+        if (modeSel) {
+          modeSel.addEventListener("change", function () {
+            var v = modeSel.value;
+            var disable =
+              v === "holiday" || v === "paid_leave" || v === "absent";
+            tr.classList.toggle("row-holiday", v === "holiday");
+            tr.classList.toggle("row-leave", v === "paid_leave" || v === "absent");
+            tr.classList.toggle("row-missing", v === "work");
+            ["e02-in", "e02-out", "e02-br"].forEach(function (cls) {
+              var inp = tr.querySelector("." + cls);
+              inp.disabled = disable;
+              if (disable) inp.value = "";
+            });
           });
-        });
+        }
       }
     });
   }
@@ -408,6 +436,20 @@
       cursor = shiftMonth(cursor, 1);
       guard += 1;
     }
+  }
+
+  function selectedAdminMonth() {
+    var sel = $("a01-month");
+    var v = (sel && sel.value) || state.adminMonth || currentMonthKey();
+    state.adminMonth = v;
+    return v;
+  }
+
+  function updateCsvButtonLabel() {
+    var btn = $("btn-csv");
+    if (!btn) return;
+    var ym = state.adminMonth || currentMonthKey();
+    btn.textContent = "CSV出力（" + monthLabel(ym) + "）";
   }
 
   function fillDaySelect(ym, selectedIso) {
@@ -453,6 +495,7 @@
     if (state.adminDay === undefined) state.adminDay = "";
     fillMonthSelect("a01-month", state.adminMonth);
     fillDaySelect(state.adminMonth, state.adminDay);
+    updateCsvButtonLabel();
     var data = await api(
       "/api/admin/dashboard?month=" +
         encodeURIComponent(state.adminMonth) +
@@ -545,6 +588,7 @@
       if (d.status_kind === "missing") tr.className = "is-missing-row";
       if (d.status_kind === "break") tr.className = "is-break-row";
       if (d.status_kind === "holiday") tr.className = "is-holiday-row";
+      if (d.status_kind === "leave") tr.className = "is-leave-row";
       tr.dataset.workDate = d.work_date;
       tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusClass =
@@ -554,7 +598,9 @@
             ? "is-break"
             : d.status_kind === "holiday"
               ? "is-leave"
-              : "is-missing";
+              : d.status_kind === "leave"
+                ? "is-paid"
+                : "is-missing";
       var statusCell;
       if (d.is_holiday) {
         var mode = d.day_mode === "work" ? "work" : "holiday";
@@ -567,6 +613,25 @@
           (mode === "work" ? " selected" : "") +
           ">未入力</option>" +
           "</select>";
+      } else if (d.status_kind === "missing" || d.status_kind === "leave") {
+        var leaveMode =
+          d.day_mode === "paid_leave"
+            ? "paid_leave"
+            : d.day_mode === "absent"
+              ? "absent"
+              : "work";
+        statusCell =
+          '<select class="input a03-mode">' +
+          '<option value="work"' +
+          (leaveMode === "work" ? " selected" : "") +
+          ">未入力</option>" +
+          '<option value="paid_leave"' +
+          (leaveMode === "paid_leave" ? " selected" : "") +
+          ">有給</option>" +
+          '<option value="absent"' +
+          (leaveMode === "absent" ? " selected" : "") +
+          ">欠勤</option>" +
+          "</select>";
       } else {
         statusCell =
           '<span class="a03-status ' +
@@ -575,7 +640,10 @@
           d.status +
           "</span>";
       }
-      var timeDisabled = d.is_holiday && d.day_mode !== "work";
+      var timeDisabled =
+        (d.is_holiday && d.day_mode !== "work") ||
+        d.day_mode === "paid_leave" ||
+        d.day_mode === "absent";
       tr.innerHTML =
         "<td>" +
         formatDisplayDate(d.work_date) +
@@ -597,12 +665,18 @@
         statusCell +
         "</td>";
       body.appendChild(tr);
-      if (d.is_holiday) {
-        var modeSel = tr.querySelector(".a03-mode");
+      var modeSel = tr.querySelector(".a03-mode");
+      if (modeSel) {
         modeSel.addEventListener("change", function () {
-          var disable = modeSel.value === "holiday";
-          tr.classList.toggle("is-holiday-row", disable);
-          tr.classList.toggle("is-missing-row", !disable);
+          var v = modeSel.value;
+          var disable =
+            v === "holiday" || v === "paid_leave" || v === "absent";
+          tr.classList.toggle("is-holiday-row", v === "holiday");
+          tr.classList.toggle(
+            "is-leave-row",
+            v === "paid_leave" || v === "absent"
+          );
+          tr.classList.toggle("is-missing-row", v === "work");
           ["a03-in", "a03-out", "a03-br"].forEach(function (cls) {
             var inp = tr.querySelector("." + cls);
             inp.disabled = disable;
@@ -790,6 +864,7 @@
       });
       state.role = "admin";
       state.adminMonth = defaultMonthKey();
+      updateCsvButtonLabel();
       setSessionLabel();
       var next = state.pendingAdminScreen || "a01";
       $("admin-modal").classList.add("is-hidden");
@@ -1099,6 +1174,7 @@
   $("a01-month").addEventListener("change", function () {
     state.adminMonth = $("a01-month").value;
     state.adminDay = "";
+    updateCsvButtonLabel();
     $("a01-kpi-detail").classList.add("is-hidden");
     withError(refreshDashboard)();
   });
@@ -1121,9 +1197,10 @@
   });
 
   $("btn-csv").addEventListener("click", function () {
+    var month = selectedAdminMonth();
+    updateCsvButtonLabel();
     window.location.href =
-      "/api/admin/csv?month=" +
-      encodeURIComponent(state.adminMonth || currentMonthKey());
+      "/api/admin/csv?month=" + encodeURIComponent(month);
   });
 
   $("btn-add-emp").addEventListener(
@@ -1214,6 +1291,7 @@
       if (adm.admin) {
         state.role = "admin";
         state.adminMonth = defaultMonthKey();
+        updateCsvButtonLabel();
         setSessionLabel();
       }
     } catch (e2) {}

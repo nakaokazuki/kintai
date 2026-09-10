@@ -129,6 +129,7 @@ def summarize_day_row(row: Optional[Any], work_date: str) -> dict:
         br = 0
         on_break = False
         force_work = False
+        leave_type = ""
         clock_in = ""
         clock_out = ""
     else:
@@ -137,11 +138,19 @@ def summarize_day_row(row: Optional[Any], work_date: str) -> dict:
         br = int(row["break_minutes"] or 0)
         on_break = bool(row["on_break"])
         force_work = bool(row["force_work"]) if "force_work" in row.keys() else False
+        leave_type = ""
+        if "leave_type" in row.keys() and row["leave_type"]:
+            leave_type = str(row["leave_type"])
         clock_in = row["clock_in"] or ""
         clock_out = row["clock_out"] or ""
     ot = overtime_minutes(cout)
     work, required, short, is_short = break_shortage(cin, cout, br)
     label, kind = day_status_label(cin, cout, br, on_break)
+    if leave_type in ("有給", "欠勤"):
+        label = leave_type
+        kind = "leave"
+        is_short = False
+        short = 0
     return {
         "work_date": work_date,
         "clock_in": clock_in,
@@ -149,6 +158,7 @@ def summarize_day_row(row: Optional[Any], work_date: str) -> dict:
         "break_minutes": br,
         "on_break": on_break,
         "force_work": force_work,
+        "leave_type": leave_type,
         "overtime_minutes": ot,
         "work_minutes": work,
         "required_break": required,
@@ -267,20 +277,39 @@ def apply_day_edits(
             return f"{wd} の退勤時刻が不正です"
 
         # 土日祝: 手動で「未入力」にすると force_work=1（時刻入力可）
+        # 平日: day_mode = work|paid_leave|absent（有給・欠勤）
         day_mode = (item.get("day_mode") or "").strip()
         d = date.fromisoformat(wd)
         old_force = bool(row["force_work"]) if "force_work" in row.keys() else False
+        old_leave = ""
+        if "leave_type" in row.keys() and row["leave_type"]:
+            old_leave = str(row["leave_type"])
+        new_leave = old_leave
         if not is_business_day(d):
             if day_mode == "holiday":
                 new_force = 0
                 new_in = None
                 new_out = None
                 new_br = 0
+                new_leave = ""
             else:
                 # 未入力（勤務）または時刻あり
                 new_force = 1 if day_mode == "work" or new_in or new_out else 0
+                new_leave = ""
         else:
             new_force = 0
+            if day_mode == "paid_leave":
+                new_leave = "有給"
+                new_in = None
+                new_out = None
+                new_br = 0
+            elif day_mode == "absent":
+                new_leave = "欠勤"
+                new_in = None
+                new_out = None
+                new_br = 0
+            elif day_mode in ("work", "missing", ""):
+                new_leave = ""
 
         for field, old, new in (
             ("出勤", row["clock_in"], new_in),
@@ -302,46 +331,79 @@ def apply_day_edits(
                 reason,
                 conn=conn,
             )
+        if old_leave != new_leave:
+            add_log(
+                changer,
+                emp_no,
+                wd,
+                "休暇区分",
+                old_leave or "未入力",
+                new_leave or "未入力",
+                reason,
+                conn=conn,
+            )
 
         ot = overtime_minutes(parse_hhmm(new_out))
         conn.execute(
             """UPDATE attendance_days
                SET clock_in=?, clock_out=?, break_minutes=?, overtime_minutes=?,
-                   on_break=0, break_started_at=NULL, force_work=?
+                   on_break=0, break_started_at=NULL, force_work=?, leave_type=?
                WHERE emp_no=? AND work_date=?""",
-            (new_in, new_out, new_br, ot, new_force, emp_no, wd),
+            (new_in, new_out, new_br, ot, new_force, new_leave, emp_no, wd),
         )
     return None
 
 
 def month_days_payload(emp_no: str, year: int, month: int) -> list:
+    """対象月の日次一覧。一括SELECTで Neon でも初回表示がタイムアウトしにくくする。"""
     from logic import is_business_day
 
     days_in_month = calendar.monthrange(year, month)[1]
     today = today_tokyo()
-    result = []
+    start = date(year, month, 1)
+    end = min(date(year, month, days_in_month), today)
+    if start > today:
+        return []
+
     with db.get_conn() as conn:
-        for day in range(1, days_in_month + 1):
-            d = date(year, month, day)
-            if d > today:
-                continue
-            wd = d.isoformat()
-            info = recalc_day(conn, emp_no, wd)
-            info["day"] = day
-            info["weekday"] = WEEKDAYS[d.weekday()]
-            info["is_weekend"] = d.weekday() >= 5
-            info["is_holiday"] = not is_business_day(d)
-            # 土日祝は既定で休日。手動で未入力（勤務）にした日・打刻がある日は通常判定
-            if info["is_holiday"] and not info["force_work"] and not info["clock_in"] and not info["clock_out"]:
+        rows = conn.execute(
+            """SELECT emp_no, work_date, clock_in, clock_out, break_minutes,
+                      on_break, break_started_at, overtime_minutes, force_work, leave_type
+               FROM attendance_days
+               WHERE emp_no=? AND work_date >= ? AND work_date <= ?""",
+            (emp_no, start.isoformat(), end.isoformat()),
+        ).fetchall()
+        by_date = {r["work_date"]: r for r in rows}
+
+        result = []
+        cursor = start
+        while cursor <= end:
+            wd = cursor.isoformat()
+            info = summarize_day_row(by_date.get(wd), wd)
+            info["day"] = cursor.day
+            info["weekday"] = WEEKDAYS[cursor.weekday()]
+            info["is_weekend"] = cursor.weekday() >= 5
+            info["is_holiday"] = not is_business_day(cursor)
+            if info["leave_type"] in ("有給", "欠勤"):
+                info["status"] = info["leave_type"]
+                info["status_kind"] = "leave"
+                info["day_mode"] = (
+                    "paid_leave" if info["leave_type"] == "有給" else "absent"
+                )
+                info["break_short"] = False
+            elif (
+                info["is_holiday"]
+                and not info["force_work"]
+                and not info["clock_in"]
+                and not info["clock_out"]
+            ):
                 info["status"] = "休日"
                 info["status_kind"] = "holiday"
                 info["day_mode"] = "holiday"
-            elif info["is_holiday"]:
-                info["day_mode"] = "work"
             else:
                 info["day_mode"] = "work"
             result.append(info)
-        conn.commit()
+            cursor += timedelta(days=1)
     return result
 
 
@@ -354,6 +416,8 @@ def missing_and_break_counts(emp_no: str, year: int, month: int) -> tuple:
     for d in days:
         work_date = date.fromisoformat(d["work_date"])
         if not is_business_day(work_date):
+            continue
+        if d["status_kind"] == "leave":
             continue
         if d["status_kind"] == "missing":
             missing += 1
@@ -770,7 +834,7 @@ def admin_dashboard():
 
     # 対象期間の勤怠を一括取得（社員×日の個別クエリをやめて高速化）
     att_rows = db.fetchall(
-        """SELECT emp_no, work_date, clock_in, clock_out, break_minutes, on_break, force_work
+        """SELECT emp_no, work_date, clock_in, clock_out, break_minutes, on_break, force_work, leave_type
            FROM attendance_days
            WHERE work_date >= ? AND work_date <= ?""",
         (range_start.isoformat(), range_end.isoformat()),
@@ -793,7 +857,9 @@ def admin_dashboard():
             row = att_map.get((emp["emp_no"], wd))
             info = summarize_day_row(row, wd)
             holiday = not is_business_day(d)
-            if (
+            if info["status_kind"] == "leave":
+                pass
+            elif (
                 holiday
                 and not info["force_work"]
                 and not info["clock_in"]
@@ -810,6 +876,8 @@ def admin_dashboard():
                     break_list.append(emp_label(emp))
             else:
                 if not is_business_day(d):
+                    continue
+                if info["status_kind"] == "leave":
                     continue
                 if info["status_kind"] == "missing":
                     emp_missing += 1
@@ -1087,32 +1155,76 @@ def admin_deactivate(emp_no):
 @app.get("/api/admin/csv")
 @require_admin
 def admin_csv():
-    ym = request.args.get("month") or month_key(today_tokyo().year, today_tokyo().month)
+    """ダッシュボードで選んだ対象月のみをCSV出力する（他月は含めない）。"""
+    from logic import is_business_day
+
+    ym = (request.args.get("month") or "").strip() or month_key(
+        today_tokyo().year, today_tokyo().month
+    )
     year, month = parse_month_key(ym)
-    employees = db.fetchall("SELECT emp_no, name FROM employees WHERE active=1 ORDER BY emp_no")
+    ym_label = f"{year}/{month}"
+    today = today_tokyo()
+    days_in_month = calendar.monthrange(year, month)[1]
+    start = date(year, month, 1)
+    end = min(date(year, month, days_in_month), today)
+
+    employees = db.fetchall(
+        "SELECT emp_no, name FROM employees WHERE active=1 ORDER BY emp_no"
+    )
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
         ["年月", "社員番号", "氏名", "日付", "出勤", "退勤", "休憩分", "残業分", "状態", "提出ステータス"]
     )
-    for emp in employees:
-        sub = get_or_create_submission(emp["emp_no"], ym)
-        days = month_days_payload(emp["emp_no"], year, month)
-        for d in days:
-            writer.writerow(
-                [
-                    f"{year}/{month}",
-                    emp["emp_no"],
-                    emp["name"],
-                    format_log_date(d["work_date"]),
-                    d["clock_in"] or "",
-                    d["clock_out"] or "",
-                    d["break_minutes"],
-                    d["overtime_minutes"],
-                    d["status"],
-                    sub["status"],
-                ]
-            )
+
+    if start <= today and employees:
+        att_rows = db.fetchall(
+            """SELECT emp_no, work_date, clock_in, clock_out, break_minutes,
+                      on_break, break_started_at, overtime_minutes, force_work, leave_type
+               FROM attendance_days
+               WHERE work_date >= ? AND work_date <= ?""",
+            (start.isoformat(), end.isoformat()),
+        )
+        att_map = {(r["emp_no"], r["work_date"]): r for r in att_rows}
+        sub_rows = db.fetchall(
+            "SELECT emp_no, status FROM monthly_submissions WHERE year_month=?",
+            (ym,),
+        )
+        sub_map = {r["emp_no"]: r["status"] for r in sub_rows}
+
+        for emp in employees:
+            sub_status = sub_map.get(emp["emp_no"], "未提出")
+            cursor = start
+            while cursor <= end:
+                wd = cursor.isoformat()
+                info = summarize_day_row(att_map.get((emp["emp_no"], wd)), wd)
+                if info["leave_type"] in ("有給", "欠勤"):
+                    status = info["leave_type"]
+                elif (
+                    not is_business_day(cursor)
+                    and not info["force_work"]
+                    and not info["clock_in"]
+                    and not info["clock_out"]
+                ):
+                    status = "休日"
+                else:
+                    status = info["status"]
+                writer.writerow(
+                    [
+                        ym_label,
+                        emp["emp_no"],
+                        emp["name"],
+                        format_log_date(wd),
+                        info["clock_in"] or "",
+                        info["clock_out"] or "",
+                        info["break_minutes"],
+                        info["overtime_minutes"],
+                        status,
+                        sub_status,
+                    ]
+                )
+                cursor += timedelta(days=1)
+
     output = buf.getvalue()
     return Response(
         "\ufeff" + output,
