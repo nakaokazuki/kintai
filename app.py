@@ -22,7 +22,6 @@ from flask import (
 import db
 from logic import (
     break_shortage,
-    can_submit_month as can_submit_month_strict,
     day_status_label,
     format_hhmm,
     month_key,
@@ -35,9 +34,7 @@ from logic import (
 
 
 def can_submit_month(year: int, month: int) -> bool:
-    """Notionどおり厳格にする場合は KINTAI_STRICT_SUBMIT=1。"""
-    if os.environ.get("KINTAI_STRICT_SUBMIT", "0") == "1":
-        return can_submit_month_strict(year, month)
+    """提出日の制限なし（いつでも提出可）。未入力チェックは別途行う。"""
     return True
 
 app = Flask(__name__)
@@ -670,15 +667,8 @@ def submit_check(emp):
     year, month = parse_month_key(ym)
     missing, break_short, _ = missing_and_break_counts(emp["emp_no"], year, month)
     sub = get_or_create_submission(emp["emp_no"], ym)
-    allowed_day = can_submit_month(year, month)
-    can = (
-        missing == 0
-        and allowed_day
-        and sub["status"] in ("未提出", "差戻し")
-    )
+    can = missing == 0 and sub["status"] in ("未提出", "差戻し")
     messages = []
-    if not allowed_day:
-        messages.append("提出できるのは翌月の最初の営業日のみです")
     if missing > 0:
         messages.append(f"未入力が{missing}件あるため提出できません")
     if break_short > 0:
@@ -695,7 +685,7 @@ def submit_check(emp):
             "can_submit": can,
             "submission": sub,
             "messages": messages,
-            "can_submit_today": allowed_day,
+            "can_submit_today": True,
         }
     )
 
@@ -708,8 +698,6 @@ def employee_submit(emp):
     )
     year, month = parse_month_key(ym)
     missing, break_short, _ = missing_and_break_counts(emp["emp_no"], year, month)
-    if not can_submit_month(year, month):
-        return json_err("提出できるのは翌月の最初の営業日のみです")
     if missing > 0:
         return json_err(f"未入力が{missing}件あるため提出できません")
     sub = get_or_create_submission(emp["emp_no"], ym)
@@ -901,6 +889,8 @@ def admin_dashboard():
             "month": ym,
             "date": date_out,
             "scope": scope,
+            "range_start": range_start.isoformat(),
+            "range_end": range_end.isoformat(),
             "kpi": {
                 "unsubmitted": len(unsubmitted_list),
                 "pending": len(pending_list),
@@ -1083,6 +1073,7 @@ def admin_logs():
     q_date = (request.args.get("date") or "").strip()
     q_emp = (request.args.get("emp") or "").strip()
     q_changer = (request.args.get("changer") or "").strip()
+    q_reason = (request.args.get("reason") or "").strip()
     rows = db.fetchall(
         "SELECT * FROM change_logs ORDER BY id DESC LIMIT 500"
     )
@@ -1094,22 +1085,25 @@ def admin_logs():
         emp = db.fetchone("SELECT name FROM employees WHERE emp_no=?", (r["emp_no"],))
         name = emp["name"] if emp else r["emp_no"]
         created = r["created_at"]
+        reason = r["reason"] or ""
         if not log_date_matches(created, q_date):
             continue
         if q_emp and q_emp not in r["emp_no"] and q_emp not in name:
             continue
         if q_changer and q_changer not in r["changer"]:
             continue
+        if q_reason and q_reason not in reason:
+            continue
         out.append(
             {
                 "created_at": created,
                 "display_date": format_log_date(created),
                 "changer": r["changer"],
-                "employee": f"{name}（{r['emp_no']}）",
+                "employee": name,
                 "field_name": r["field_name"],
                 "old_value": r["old_value"] or "—",
                 "new_value": r["new_value"] or "—",
-                "reason": r["reason"] or "",
+                "reason": reason,
                 "work_date": r["work_date"] or "",
             }
         )

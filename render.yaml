@@ -12,8 +12,6 @@ services:
         value: "7777"
       - key: ADMIN_RESET_CODE
         value: RESET-KINTAI-2026
-      - key: KINTAI_STRICT_SUBMIT
-        value: "0"
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: DATABASE_URL

@@ -86,7 +86,6 @@ Render の Web Service → **Environment** に追加:
 | `SECRET_KEY` | ランダムな長い文字列（Generate 可） |
 | `ADMIN_PASSWORD` | `7777`（本番なら変更推奨） |
 | `ADMIN_RESET_CODE` | `RESET-KINTAI-2026` |
-| `KINTAI_STRICT_SUBMIT` | `0`（デモなら毎日提出可） |
 | `PYTHON_VERSION` | `3.11.9` |
 
 `DATABASE_URL` を保存すると自動で再デプロイされる。  

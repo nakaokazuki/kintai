@@ -39,13 +39,8 @@ def first_business_day_of_month(year: int, month: int) -> date:
 
 
 def can_submit_month(target_year: int, target_month: int, on: Optional[date] = None) -> bool:
-    """対象月の提出は「翌月の最初の営業日」のみ。"""
-    on = on or today_tokyo()
-    if target_month == 12:
-        ny, nm = target_year + 1, 1
-    else:
-        ny, nm = target_year, target_month + 1
-    return on == first_business_day_of_month(ny, nm)
+    """提出はいつでも可能（日付制限なし）。互換のため関数は残す。"""
+    return True
 
 
 def parse_hhmm(value: Optional[str]) -> Optional[time]:

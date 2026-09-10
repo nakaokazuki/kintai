@@ -47,8 +47,6 @@ cd test
    - `SECRET_KEY` … ランダム文字列
    - `ADMIN_PASSWORD` … 管理者パスワード
    - `ADMIN_RESET_CODE` … リセットコード
-   - `KINTAI_STRICT_SUBMIT=1` … 提出を「翌月最初の営業日のみ」に厳格化（未設定/`0` ならデモ用に毎日提出可）
-
 手順の詳細は `DEPLOY.md` を参照。
 
 デプロイ後の URL（例: `https://xxxx.onrender.com`）を社員に共有する。

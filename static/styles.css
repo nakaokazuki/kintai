@@ -584,8 +584,10 @@ select {
 .kpi-label {
   display: block;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
+  line-height: 1.25;
+  min-height: 2.5em;
 }
 
 .kpi-value {
@@ -922,6 +924,18 @@ select {
   padding: 18px;
 }
 
+.a03-actions-block .hint {
+  margin: 8px 0 14px;
+}
+
+.a03-actions-block .field-label + .input {
+  margin-bottom: 0;
+}
+
+.a03-actions-block #a03-reject-reason {
+  margin-bottom: 0;
+}
+
 .a03-actions {
   margin-top: 14px;
 }
@@ -958,9 +972,15 @@ select {
 
 .a04-search-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 16px;
+}
+
+@media (max-width: 720px) {
+  .a04-search-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .a04-search-row .input {

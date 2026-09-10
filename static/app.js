@@ -5,7 +5,7 @@
     today: null,
     empMonth: null,
     adminMonth: null,
-    adminDay: "",
+    adminDay: null,
     dashboardLists: null,
     dashboardScope: "month",
     detailEmp: null,
@@ -63,6 +63,60 @@
       "/" +
       parseInt(parts[2], 10)
     );
+  }
+
+  /** 2026-09-09 → 9/9 */
+  function formatMonthDay(isoDate) {
+    if (!isoDate) return "—";
+    var parts = String(isoDate).replace("T", " ").slice(0, 10).split("-");
+    if (parts.length !== 3) return String(isoDate);
+    return parseInt(parts[1], 10) + "/" + parseInt(parts[2], 10);
+  }
+
+  function todayIsoLocal() {
+    var today = new Date();
+    return (
+      today.getFullYear() +
+      "-" +
+      pad(today.getMonth() + 1) +
+      "-" +
+      pad(today.getDate())
+    );
+  }
+
+  /** 対象月の既定日。当月なら当日、それ以外は月合計（空） */
+  function defaultDayForMonth(ym) {
+    var t = todayIsoLocal();
+    if (t.slice(0, 7) === ym) return t;
+    return "";
+  }
+
+  function monthRangeEndIso(ym) {
+    var parts = ym.split("-");
+    var y = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    var last = new Date(y, m, 0).getDate();
+    var endIso = ym + "-" + pad(last);
+    var t = todayIsoLocal();
+    return endIso > t ? t : endIso;
+  }
+
+  function missingBreakScopeLabel(kind) {
+    var base = kind === "break_short" ? "休憩不足" : "未入力";
+    if (state.adminDay) {
+      return formatMonthDay(state.adminDay) + "の" + base;
+    }
+    var ym = state.adminMonth || defaultMonthKey();
+    var startMd = parseInt(ym.split("-")[1], 10) + "/1";
+    var endIso = state.dashboardRangeEnd || monthRangeEndIso(ym);
+    return startMd + " ~ " + formatMonthDay(endIso) + "までの" + base;
+  }
+
+  function updateMissingBreakLabels() {
+    var missingLabel = $("kpi-missing-label");
+    var breakLabel = $("kpi-break-label");
+    if (missingLabel) missingLabel.textContent = missingBreakScopeLabel("missing");
+    if (breakLabel) breakLabel.textContent = missingBreakScopeLabel("break_short");
   }
 
   async function api(url, options) {
@@ -201,13 +255,31 @@
 
     if (id === "e01" && isEmployeeActive()) refreshToday();
     if (id === "e02") refreshEmpMonth();
-    if (id === "a01") refreshDashboard();
+    if (id === "a01") {
+      withError(function () {
+        return withLoading(refreshDashboard);
+      })();
+    }
     if (id === "a03") {
-      if (state.detailEmp) refreshDetail(state.detailEmp);
+      if (state.detailEmp) {
+        withError(function () {
+          return withLoading(function () {
+            return refreshDetail(state.detailEmp);
+          });
+        })();
+      }
       /* 社員未選択時は空のまま（A-05の氏名クリックで遷移） */
     }
-    if (id === "a04") refreshLogs();
-    if (id === "a05") refreshEmployees();
+    if (id === "a04") {
+      withError(function () {
+        return withLoading(refreshLogs);
+      })();
+    }
+    if (id === "a05") {
+      withError(function () {
+        return withLoading(refreshEmployees);
+      })();
+    }
   }
 
   function updatePunchButtons(today) {
@@ -464,14 +536,13 @@
     var y = parseInt(parts[0], 10);
     var m = parseInt(parts[1], 10);
     var last = new Date(y, m, 0).getDate();
-    var today = new Date();
-    var todayIso =
-      today.getFullYear() +
-      "-" +
-      pad(today.getMonth() + 1) +
-      "-" +
-      pad(today.getDate());
-    var pick = selectedIso === null || selectedIso === undefined ? "" : selectedIso;
+    var todayIso = todayIsoLocal();
+    var pick;
+    if (selectedIso === null || selectedIso === undefined) {
+      pick = defaultDayForMonth(ym);
+    } else {
+      pick = selectedIso;
+    }
     if (pick && pick.slice(0, 7) !== ym) {
       pick = "";
     }
@@ -492,7 +563,6 @@
 
   async function refreshDashboard() {
     if (!state.adminMonth) state.adminMonth = defaultMonthKey();
-    if (state.adminDay === undefined) state.adminDay = "";
     fillMonthSelect("a01-month", state.adminMonth);
     fillDaySelect(state.adminMonth, state.adminDay);
     updateCsvButtonLabel();
@@ -504,6 +574,7 @@
     );
     state.adminDay = data.date || "";
     state.dashboardScope = data.scope || "month";
+    state.dashboardRangeEnd = data.range_end || monthRangeEndIso(state.adminMonth);
     if ($("a01-day").value !== state.adminDay) {
       fillDaySelect(state.adminMonth, state.adminDay);
     }
@@ -513,13 +584,14 @@
     var dayUnit = state.dashboardScope === "day" ? "人" : "件";
     $("kpi-missing").textContent = data.kpi.missing + dayUnit;
     $("kpi-break").textContent = data.kpi.break_short + dayUnit;
+    updateMissingBreakLabels();
   }
 
   var KPI_TITLES = {
     unsubmitted: "未提出の社員",
     pending: "承認待ちの社員",
-    missing: "未入力の社員",
-    break_short: "休憩不足の社員"
+    missing: "未入力",
+    break_short: "休憩不足"
   };
 
   function showKpiDetail(kind) {
@@ -527,15 +599,11 @@
     var list = $("a01-kpi-detail-list");
     var title = $("a01-kpi-detail-title");
     var rows = (state.dashboardLists && state.dashboardLists[kind]) || [];
-    var label = KPI_TITLES[kind] || kind;
+    var label;
     if (kind === "missing" || kind === "break_short") {
-      if (state.adminDay) {
-        label += "（" + formatDisplayDate(state.adminDay) + "）";
-      } else {
-        label += "（" + monthLabel(state.adminMonth) + "・月合計）";
-      }
+      label = missingBreakScopeLabel(kind);
     } else {
-      label += "（" + monthLabel(state.adminMonth) + "）";
+      label = (KPI_TITLES[kind] || kind) + "（" + monthLabel(state.adminMonth) + "）";
     }
     title.textContent = label;
     list.innerHTML = "";
@@ -692,10 +760,12 @@
     var q =
       "/api/admin/logs?date=" +
       encodeURIComponent($("a04-date").value || "") +
+      "&changer=" +
+      encodeURIComponent($("a04-changer").value || "") +
       "&emp=" +
       encodeURIComponent($("a04-emp").value || "") +
-      "&changer=" +
-      encodeURIComponent($("a04-changer").value || "");
+      "&reason=" +
+      encodeURIComponent($("a04-reason").value || "");
     var data = await api(q);
     var body = $("a04-body");
     body.innerHTML = "";
@@ -753,11 +823,13 @@
           "click",
           withError(async function () {
             if (!confirm(e.emp_no + " を無効化しますか？")) return;
-            await api("/api/admin/employees/" + e.emp_no + "/deactivate", {
-              method: "POST",
-              body: "{}"
-            });
-            refreshEmployees();
+            await withLoading(async function () {
+              await api("/api/admin/employees/" + e.emp_no + "/deactivate", {
+                method: "POST",
+                body: "{}"
+              });
+              await refreshEmployees();
+            }, "無効化しています…");
           })
         );
         tdAction.appendChild(btn);
@@ -776,7 +848,9 @@
       return;
     }
     var month = state.empMonth || currentMonthKey();
-    var data = await api("/api/employee/submit-check?month=" + month);
+    var data = await withLoading(function () {
+      return api("/api/employee/submit-check?month=" + month);
+    }, "提出前チェックを読み込んでいます…");
     var list = $("submit-checklist");
     list.innerHTML = "";
     var li1 = document.createElement("li");
@@ -832,6 +906,7 @@
         return;
       }
       state.empBusy = true;
+      showLoading("社員情報を確認しています…");
       try {
         var data = await api("/api/employee/login", {
           method: "POST",
@@ -843,6 +918,7 @@
         applyEmployeeLogin(data);
         await refreshToday();
       } finally {
+        hideLoading();
         state.empBusy = false;
       }
     })
@@ -858,10 +934,12 @@
   $("btn-admin-login").addEventListener(
     "click",
     withError(async function () {
-      await api("/api/admin/login", {
-        method: "POST",
-        body: JSON.stringify({ password: $("login-admin-pass").value })
-      });
+      await withLoading(async function () {
+        await api("/api/admin/login", {
+          method: "POST",
+          body: JSON.stringify({ password: $("login-admin-pass").value })
+        });
+      }, "ログインしています…");
       state.role = "admin";
       state.adminMonth = defaultMonthKey();
       updateCsvButtonLabel();
@@ -876,13 +954,15 @@
   $("btn-reset").addEventListener(
     "click",
     withError(async function () {
-      await api("/api/admin/reset-password", {
-        method: "POST",
-        body: JSON.stringify({
-          reset_code: $("reset-code").value,
-          new_password: $("reset-new").value
-        })
-      });
+      await withLoading(async function () {
+        await api("/api/admin/reset-password", {
+          method: "POST",
+          body: JSON.stringify({
+            reset_code: $("reset-code").value,
+            new_password: $("reset-new").value
+          })
+        });
+      }, "パスワードをリセットしています…");
       alert("パスワードをリセットしました");
     })
   );
@@ -892,9 +972,10 @@
     return pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
+  var busyDepth = 0;
   var punchSaving = false;
 
-  function ensurePunchModal() {
+  function ensureBusyModal() {
     var modal = $("punch-modal");
     if (modal) return modal;
     modal = document.createElement("div");
@@ -905,43 +986,79 @@
     modal.innerHTML =
       '<div class="modal-backdrop"></div>' +
       '<div class="modal-panel modal-panel-compact">' +
-      '<h2 id="punch-modal-title" class="card-title">記録中</h2>' +
-      '<p class="hint" id="punch-modal-msg">サーバに保存しています。完了するまでタブを閉じないでください。</p>' +
+      '<h2 id="punch-modal-title" class="card-title">読み込み中</h2>' +
+      '<p class="hint" id="punch-modal-msg">処理しています。しばらくお待ちください。</p>' +
       "</div>";
     document.body.appendChild(modal);
     return modal;
   }
 
-  function showPunchSaving(message) {
+  function showBusy(title, message) {
+    busyDepth++;
     punchSaving = true;
-    ensurePunchModal();
-    var title = $("punch-modal-title");
-    var msg = $("punch-modal-msg");
+    ensureBusyModal();
+    var titleEl = $("punch-modal-title");
+    var msgEl = $("punch-modal-msg");
     var modal = $("punch-modal");
-    if (title) title.textContent = "記録中";
-    if (msg) {
-      msg.textContent =
-        message || "サーバに保存しています。完了するまでタブを閉じないでください。";
+    if (titleEl) titleEl.textContent = title || "読み込み中";
+    if (msgEl) {
+      msgEl.textContent =
+        message || "処理しています。しばらくお待ちください。";
     }
     if (modal) modal.classList.remove("is-hidden");
   }
 
-  function hidePunchSaving(okMessage) {
-    ensurePunchModal();
-    var title = $("punch-modal-title");
-    var msg = $("punch-modal-msg");
+  function hideBusy(okMessage) {
+    ensureBusyModal();
+    var titleEl = $("punch-modal-title");
+    var msgEl = $("punch-modal-msg");
     var modal = $("punch-modal");
-    if (okMessage && title && msg && modal) {
-      title.textContent = "記録完了";
-      msg.textContent = okMessage;
-      setTimeout(function () {
-        modal.classList.add("is-hidden");
-        punchSaving = false;
-      }, 600);
+
+    function finish() {
+      busyDepth = Math.max(0, busyDepth - 1);
+      if (busyDepth > 0) return;
+      if (modal) modal.classList.add("is-hidden");
+      punchSaving = false;
+    }
+
+    if (okMessage && busyDepth <= 1 && titleEl && msgEl && modal) {
+      titleEl.textContent = "記録完了";
+      msgEl.textContent = okMessage;
+      setTimeout(finish, 600);
       return;
     }
-    if (modal) modal.classList.add("is-hidden");
-    punchSaving = false;
+    finish();
+  }
+
+  function showPunchSaving(message) {
+    showBusy(
+      "記録中",
+      message || "サーバに保存しています。完了するまでタブを閉じないでください。"
+    );
+  }
+
+  function hidePunchSaving(okMessage) {
+    hideBusy(okMessage);
+  }
+
+  function showLoading(message) {
+    showBusy(
+      "読み込み中",
+      message || "処理しています。しばらくお待ちください。"
+    );
+  }
+
+  function hideLoading() {
+    hideBusy();
+  }
+
+  async function withLoading(fn, message) {
+    showLoading(message);
+    try {
+      return await fn();
+    } finally {
+      hideLoading();
+    }
   }
 
   window.addEventListener("beforeunload", function (e) {
@@ -1057,32 +1174,37 @@
         if (action === "close-modal") closeSubmitModal();
         if (action === "close-admin-modal") closeAdminModal();
         if (action === "a03-approve") {
-          await api("/api/admin/approve", {
-            method: "POST",
-            body: JSON.stringify({
-              emp_no: state.detailEmp,
-              month: state.adminMonth
-            })
-          });
+          await withLoading(async function () {
+            await api("/api/admin/approve", {
+              method: "POST",
+              body: JSON.stringify({
+                emp_no: state.detailEmp,
+                month: state.adminMonth
+              })
+            });
+            await refreshDetail(state.detailEmp);
+          }, "承認しています…");
           alert("1ヶ月分を承認しました");
-          refreshDetail(state.detailEmp);
         }
         if (action === "a03-reject") {
-          var reasonReject = $("a03-reason");
+          var reasonReject = $("a03-reject-reason");
           if (!reasonReject.value.trim()) {
             alert("差戻しには理由が必要です");
             return;
           }
-          await api("/api/admin/reject", {
-            method: "POST",
-            body: JSON.stringify({
-              emp_no: state.detailEmp,
-              month: state.adminMonth,
-              reason: reasonReject.value.trim()
-            })
-          });
+          await withLoading(async function () {
+            await api("/api/admin/reject", {
+              method: "POST",
+              body: JSON.stringify({
+                emp_no: state.detailEmp,
+                month: state.adminMonth,
+                reason: reasonReject.value.trim()
+              })
+            });
+            await refreshDetail(state.detailEmp);
+          }, "差戻しています…");
+          reasonReject.value = "";
           alert("1ヶ月分を差戻しました");
-          refreshDetail(state.detailEmp);
         }
         if (action === "a03-save") {
           var reasonSave = $("a03-reason");
@@ -1101,17 +1223,20 @@
               day_mode: modeEl ? modeEl.value : "work"
             });
           });
-          await api("/api/admin/save-days", {
-            method: "POST",
-            body: JSON.stringify({
-              emp_no: state.detailEmp,
-              month: state.adminMonth,
-              reason: reasonSave.value.trim(),
-              days: days
-            })
-          });
+          await withLoading(async function () {
+            await api("/api/admin/save-days", {
+              method: "POST",
+              body: JSON.stringify({
+                emp_no: state.detailEmp,
+                month: state.adminMonth,
+                reason: reasonSave.value.trim(),
+                days: days
+              })
+            });
+            await refreshDetail(state.detailEmp);
+          }, "修正を保存しています…");
+          reasonSave.value = "";
           alert("1ヶ月分の修正を保存しました");
-          refreshDetail(state.detailEmp);
         }
       })
     );
@@ -1120,10 +1245,12 @@
   $("btn-do-submit").addEventListener(
     "click",
     withError(async function () {
-      await api("/api/employee/submit", {
-        method: "POST",
-        body: JSON.stringify({ month: state.empMonth || currentMonthKey() })
-      });
+      await withLoading(async function () {
+        await api("/api/employee/submit", {
+          method: "POST",
+          body: JSON.stringify({ month: state.empMonth || currentMonthKey() })
+        });
+      }, "提出しています…");
       closeSubmitModal();
       alert("提出しました");
       refreshEmpMonth();
@@ -1158,30 +1285,37 @@
           day_mode: modeEl ? modeEl.value : "work"
         });
       });
-      await api("/api/employee/save-days", {
-        method: "POST",
-        body: JSON.stringify({
-          month: state.empMonth,
-          reason: reason.value.trim(),
-          days: days
-        })
-      });
+      await withLoading(async function () {
+        await api("/api/employee/save-days", {
+          method: "POST",
+          body: JSON.stringify({
+            month: state.empMonth,
+            reason: reason.value.trim(),
+            days: days
+          })
+        });
+        await refreshEmpMonth();
+      }, "修正を保存しています…");
+      reason.value = "";
       alert("修正を保存しました");
-      refreshEmpMonth();
     })
   );
 
   $("a01-month").addEventListener("change", function () {
     state.adminMonth = $("a01-month").value;
-    state.adminDay = "";
+    state.adminDay = null;
     updateCsvButtonLabel();
     $("a01-kpi-detail").classList.add("is-hidden");
-    withError(refreshDashboard)();
+    withError(function () {
+      return withLoading(refreshDashboard);
+    })();
   });
   $("a01-day").addEventListener("change", function () {
     state.adminDay = $("a01-day").value;
     $("a01-kpi-detail").classList.add("is-hidden");
-    withError(refreshDashboard)();
+    withError(function () {
+      return withLoading(refreshDashboard);
+    })();
   });
   document.querySelectorAll("[data-kpi]").forEach(function (el) {
     el.addEventListener("click", function () {
@@ -1192,7 +1326,7 @@
     $("a01-kpi-detail").classList.add("is-hidden");
   });
 
-  ["a04-date", "a04-emp", "a04-changer"].forEach(function (id) {
+  ["a04-date", "a04-changer", "a04-emp", "a04-reason"].forEach(function (id) {
     $(id).addEventListener("input", withError(refreshLogs));
   });
 
@@ -1206,16 +1340,18 @@
   $("btn-add-emp").addEventListener(
     "click",
     withError(async function () {
-      await api("/api/admin/employees", {
-        method: "POST",
-        body: JSON.stringify({
-          emp_no: $("new-emp-no").value.trim(),
-          name: $("new-emp-name").value.trim()
-        })
-      });
-      $("new-emp-no").value = "";
-      $("new-emp-name").value = "";
-      refreshEmployees();
+      await withLoading(async function () {
+        await api("/api/admin/employees", {
+          method: "POST",
+          body: JSON.stringify({
+            emp_no: $("new-emp-no").value.trim(),
+            name: $("new-emp-name").value.trim()
+          })
+        });
+        $("new-emp-no").value = "";
+        $("new-emp-name").value = "";
+        await refreshEmployees();
+      }, "社員を追加しています…");
     })
   );
 

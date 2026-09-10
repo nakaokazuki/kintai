@@ -68,8 +68,17 @@
           </table>
         </div>
         <div id="e02-edit-block" class="a03-actions-block is-hidden">
-          <label class="field-label" for="e02-reason">修正理由</label>
-          <input id="e02-reason" class="input" type="text" placeholder="理由を入力（修正保存時は必須）" />
+          <label class="field-label" for="e02-reason">修正理由（一括）</label>
+          <select id="e02-reason" class="input" required>
+            <option value="">理由を選択（必須）</option>
+            <option value="打刻忘れ">打刻忘れ</option>
+            <option value="打刻時刻の誤り">打刻時刻の誤り</option>
+            <option value="休憩時間の修正">休憩時間の修正</option>
+            <option value="有給・欠勤の登録漏れ／誤り">有給・欠勤の登録漏れ／誤り</option>
+            <option value="休日出勤の登録">休日出勤の登録</option>
+            <option value="差戻し指摘への対応">差戻し指摘への対応</option>
+          </select>
+          <p class="hint">複数の日付・項目を直しても、修正理由は1つでまとめて保存されます。</p>
           <div class="action-row action-row-full a03-actions">
             <button type="button" class="btn btn-secondary" id="btn-e02-save">修正して保存</button>
           </div>
@@ -77,11 +86,11 @@
       </div>
     </section>
 
-    <!-- A-01 ダッシュボード -->
-    <section id="a01" class="screen" aria-label="ダッシュボード">
+    <!-- A-01 勤怠状況一覧 -->
+    <section id="a01" class="screen" aria-label="勤怠状況一覧">
       <div class="phone phone-wide">
         <div class="app-header">
-          <h1>管理者ダッシュボード</h1>
+          <h1>勤怠状況一覧</h1>
           <div class="header-links">
             <button type="button" class="linkish" data-goto="e01">打刻</button>
           </div>
@@ -106,11 +115,11 @@
             <span class="kpi-value" id="kpi-pending">—</span>
           </button>
           <button type="button" class="kpi kpi-click" data-kpi="missing">
-            <span class="kpi-label">未入力</span>
+            <span class="kpi-label" id="kpi-missing-label">未入力</span>
             <span class="kpi-value" id="kpi-missing">—</span>
           </button>
           <button type="button" class="kpi kpi-click" data-kpi="break_short">
-            <span class="kpi-label">休憩不足</span>
+            <span class="kpi-label" id="kpi-break-label">休憩不足</span>
             <span class="kpi-value" id="kpi-break">—</span>
           </button>
         </div>
@@ -122,7 +131,7 @@
           <ul class="kpi-detail-list" id="a01-kpi-detail-list"></ul>
         </div>
         <div class="action-row action-row-full">
-          <button type="button" class="btn btn-secondary" data-goto="a05">社員管理</button>
+          <button type="button" class="btn btn-secondary" data-goto="a05">アカウント管理</button>
           <button type="button" class="btn btn-secondary" data-goto="a04">変更履歴</button>
           <button type="button" class="btn btn-secondary" id="btn-csv">CSV出力</button>
         </div>
@@ -134,7 +143,7 @@
       <div class="phone phone-wide a03-sheet">
         <div class="app-header a03-top">
           <h1>勤怠詳細</h1>
-          <button type="button" class="linkish a03-back" data-goto="a05">社員管理</button>
+          <button type="button" class="linkish a03-back" data-goto="a05">アカウント管理</button>
         </div>
 
         <div class="a03-meta-row">
@@ -171,8 +180,24 @@
         </div>
 
         <div class="a03-actions-block">
-          <label class="field-label" for="a03-reason">差戻し／修正の理由</label>
-          <input id="a03-reason" class="input" type="text" placeholder="理由を入力（差戻し・修正時は必須）" />
+          <label class="field-label" for="a03-reason">修正理由（一括）</label>
+          <select id="a03-reason" class="input" required>
+            <option value="">理由を選択（修正保存時は必須）</option>
+            <option value="打刻忘れ">打刻忘れ</option>
+            <option value="打刻時刻の誤り">打刻時刻の誤り</option>
+            <option value="休憩時間の修正">休憩時間の修正</option>
+            <option value="有給・欠勤の登録漏れ／誤り">有給・欠勤の登録漏れ／誤り</option>
+            <option value="休日出勤の登録">休日出勤の登録</option>
+            <option value="差戻し指摘への対応">差戻し指摘への対応</option>
+          </select>
+          <p class="hint">複数の日付・項目を直しても、修正理由は1つでまとめて保存されます。</p>
+          <label class="field-label" for="a03-reject-reason">差戻しの理由</label>
+          <input
+            id="a03-reject-reason"
+            class="input"
+            type="text"
+            placeholder="差戻し時のみ入力（必須）"
+          />
           <div class="action-row action-row-full a03-actions">
             <button type="button" class="btn btn-ok" data-action="a03-approve">承認</button>
             <button type="button" class="btn btn-warn" data-action="a03-reject">差戻し</button>
@@ -187,13 +212,14 @@
       <div class="phone phone-wide a04-sheet">
         <div class="app-header a04-toolbar">
           <h1>全体の変更履歴</h1>
-          <button type="button" class="linkish" data-goto="a01">ダッシュボード</button>
+          <button type="button" class="linkish" data-goto="a01">勤怠状況一覧</button>
         </div>
 
         <div class="a04-search-row">
-          <input id="a04-date" class="input" type="search" placeholder="日付（例: 2026/9/9）" />
-          <input id="a04-emp" class="input" type="search" placeholder="社員" />
+          <input id="a04-date" class="input" type="search" placeholder="日付" />
           <input id="a04-changer" class="input" type="search" placeholder="変更者" />
+          <input id="a04-emp" class="input" type="search" placeholder="対象従業員" />
+          <input id="a04-reason" class="input" type="search" placeholder="理由 / ステータス" />
         </div>
 
         <div class="a04-table-wrap">
@@ -215,12 +241,12 @@
       </div>
     </section>
 
-    <!-- A-05 社員管理（機能用・見た目は同じ部品） -->
-    <section id="a05" class="screen" aria-label="社員管理">
+    <!-- A-05 アカウント管理（機能用・見た目は同じ部品） -->
+    <section id="a05" class="screen" aria-label="アカウント管理">
       <div class="phone phone-wide">
         <div class="app-header">
-          <h1>社員管理</h1>
-          <button type="button" class="linkish" data-goto="a01">ダッシュボード</button>
+          <h1>アカウント管理</h1>
+          <button type="button" class="linkish" data-goto="a01">勤怠状況一覧</button>
         </div>
         <div class="card">
           <label class="field-label" for="new-emp-no">新入社員の追加</label>
@@ -277,15 +303,15 @@
     </div>
   </div>
 
-  <!-- 打刻記録中 -->
+  <!-- 処理待ち（打刻の記録中／その他の読み込み中） -->
   <div id="punch-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="punch-modal-title">
     <div class="modal-backdrop"></div>
     <div class="modal-panel modal-panel-compact">
-      <h2 id="punch-modal-title" class="card-title">記録中</h2>
-      <p class="hint" id="punch-modal-msg">サーバに保存しています。完了するまでタブを閉じないでください。</p>
+      <h2 id="punch-modal-title" class="card-title">読み込み中</h2>
+      <p class="hint" id="punch-modal-msg">処理しています。しばらくお待ちください。</p>
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=20260909empkeep"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260910kpiScope"></script>
 </body>
 </html>
