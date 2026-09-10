@@ -178,17 +178,36 @@
 
   function applyEmployeeLogin(data) {
     state.role = "employee";
+    var sameEmp = state.emp && state.emp.emp_no === data.emp_no;
     state.emp = {
       emp_no: data.emp_no,
       name: data.name || ""
     };
-    state.empMonth = defaultMonthKey();
+    // 同じ社員の再確認では、月次一覧で選んでいる月を維持する
+    if (!sameEmp || !state.empMonth) {
+      state.empMonth = defaultMonthKey();
+    }
     $("emp-id").value = data.emp_no;
     saveEmpNoLocal(data.emp_no);
     $("e01-identity").textContent =
       "氏名：" + (data.name || "—") + "　番号：" + data.emp_no;
     setSessionLabel();
     setEmployeeNavEnabled(true);
+  }
+
+  /** 確認ボタン相当：セッションを確立し、提出できる状態にする */
+  async function ensureEmployeeSession(empNoOpt) {
+    var emp_no = (empNoOpt || ($("emp-id").value || "")).trim();
+    if (!emp_no) return false;
+    var data = await api("/api/employee/login", {
+      method: "POST",
+      body: JSON.stringify({ emp_no: emp_no })
+    });
+    if (!data || !data.emp_no) return false;
+    applyEmployeeLogin(data);
+    await refreshToday();
+    setEmployeeNavEnabled(true);
+    return isEmployeeActive();
   }
 
   function resetEmployeeUi() {
@@ -872,14 +891,20 @@
   }
 
   async function openSubmitModal() {
-    if (!isEmployeeActive()) {
-      alert("先に社員番号を確認してください");
+    var data;
+    try {
+      data = await withLoading(async function () {
+        var ready = await ensureEmployeeSession();
+        if (!ready || !isEmployeeActive()) {
+          throw new Error("先に社員番号を確認してください");
+        }
+        var month = state.empMonth || currentMonthKey();
+        return api("/api/employee/submit-check?month=" + month);
+      }, "提出前チェックを読み込んでいます");
+    } catch (e) {
+      alert(e.message || "提出前チェックに失敗しました");
       return;
     }
-    var month = state.empMonth || currentMonthKey();
-    var data = await withLoading(function () {
-      return api("/api/employee/submit-check?month=" + month);
-    }, "提出前チェックを読み込んでいます");
     var list = $("submit-checklist");
     list.innerHTML = "";
     var li1 = document.createElement("li");
@@ -937,15 +962,10 @@
       state.empBusy = true;
       showLoading("社員情報を確認しています");
       try {
-        var data = await api("/api/employee/login", {
-          method: "POST",
-          body: JSON.stringify({ emp_no: emp_no })
-        });
-        if (!data || !data.emp_no) {
+        var ok = await ensureEmployeeSession(emp_no);
+        if (!ok) {
           throw new Error("ログインに失敗しました");
         }
-        applyEmployeeLogin(data);
-        await refreshToday();
       } finally {
         hideLoading();
         state.empBusy = false;
@@ -1202,7 +1222,7 @@
             throw err2;
           }
         }
-        if (action === "submit") openSubmitModal();
+        if (action === "submit") await openSubmitModal();
         if (action === "close-modal") closeSubmitModal();
         if (action === "close-admin-modal") closeAdminModal();
         if (action === "a03-approve") {
@@ -1416,52 +1436,47 @@
   }
 
   withError(async function () {
+    state.empBusy = true;
     try {
-      var me = await api("/api/employee/me");
-      if (me && me.emp_no) {
-        state.empBusy = true;
-        try {
-          applyEmployeeLogin(me);
-          await refreshToday();
-        } finally {
-          state.empBusy = false;
-        }
-        return;
-      }
-    } catch (e) {}
-
-    if (savedEmpNo) {
-      state.empBusy = true;
+      var empNo = savedEmpNo;
       try {
-        var data = await api("/api/employee/login", {
-          method: "POST",
-          body: JSON.stringify({ emp_no: savedEmpNo })
-        });
-        if (data && data.emp_no) {
-          applyEmployeeLogin(data);
-          await refreshToday();
-          return;
+        var me = await api("/api/employee/me");
+        if (me && me.emp_no) {
+          empNo = me.emp_no;
         }
-      } catch (eLogin) {
-        /* 番号は入力欄に残し、確認はユーザーに任せる */
-        $("emp-id").value = savedEmpNo;
-        resetEmployeeUi();
-        $("emp-id").value = savedEmpNo;
-      } finally {
-        state.empBusy = false;
-      }
-    } else {
-      resetEmployeeUi();
-    }
+      } catch (e) {}
 
-    try {
-      var adm = await api("/api/admin/me");
-      if (adm.admin) {
-        state.role = "admin";
-        state.adminMonth = defaultMonthKey();
-        updateCsvButtonLabel();
-        setSessionLabel();
+      if (empNo) {
+        $("emp-id").value = empNo;
+        try {
+          var ok = await ensureEmployeeSession(empNo);
+          if (!ok) {
+            resetEmployeeUi();
+            $("emp-id").value = empNo;
+          }
+        } catch (eRestore) {
+          resetEmployeeUi();
+          $("emp-id").value = empNo;
+        }
+      } else {
+        resetEmployeeUi();
       }
-    } catch (e2) {}
+
+      try {
+        var adm = await api("/api/admin/me");
+        if (adm.admin) {
+          state.role = "admin";
+          state.adminMonth = defaultMonthKey();
+          updateCsvButtonLabel();
+          setSessionLabel();
+        }
+      } catch (e2) {}
+    } finally {
+      state.empBusy = false;
+      // 復元成功時は提出ボタンを確実に有効化
+      if (isEmployeeActive()) {
+        setEmployeeNavEnabled(true);
+      }
+    }
   })();
 })();
