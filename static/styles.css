@@ -310,6 +310,14 @@ select {
   margin-bottom: 8px;
 }
 
+.modal-panel-compact.is-single-line .card-title {
+  margin-bottom: 0;
+}
+
+.modal-panel-compact.is-single-line #punch-modal-msg {
+  display: none;
+}
+
 .modal-actions {
   margin-top: 16px;
 }

@@ -207,12 +207,15 @@ def format_log_date(iso: str) -> str:
 
 
 def log_date_matches(created_at: str, query: str) -> bool:
-    """画面表記（2026/9/9）や 2026-09-09 などで検索できるようにする。"""
+    """画面表記（2026/9/9）や 2026-09-09 などで部分一致検索できるようにする。"""
     q = (query or "").strip()
     if not q:
         return True
-    display = format_log_date(created_at)
-    if q in display or q in (created_at or ""):
+    raw = (created_at or "").strip()
+    if not raw:
+        return False
+    display = format_log_date(raw)
+    if q in display or q in raw:
         return True
     # 2026-09-09 / 2026/09/09 → 2026/9/9 に正規化して部分一致
     normalized = q.replace("-", "/").replace(".", "/")
@@ -224,7 +227,17 @@ def log_date_matches(created_at: str, query: str) -> bool:
     if not norm_parts:
         return False
     q_norm = "/".join(norm_parts)
-    return q_norm in display
+    return q_norm in display or q_norm in raw.replace("-", "/")
+
+
+def text_matches(value: str, query: str) -> bool:
+    """空白差を無視した部分一致。"""
+    q = (query or "").strip()
+    if not q:
+        return True
+    hay = (value or "").replace(" ", "").replace("　", "")
+    needle = q.replace(" ", "").replace("　", "")
+    return needle in hay
 
 
 def get_or_create_submission(emp_no: str, ym: str) -> dict:
@@ -351,6 +364,64 @@ def apply_day_edits(
     return None
 
 
+def fill_empty_business_days(
+    conn,
+    emp_no: str,
+    start: date,
+    end: date,
+) -> int:
+    """指定期間の未入力営業日を 0:00 / 0:00 / 0 / 0 で埋める。本日は対象外。"""
+    from logic import is_business_day
+
+    today = today_tokyo()
+    if end >= today:
+        end = today - timedelta(days=1)
+    if start > end:
+        return 0
+
+    rows = conn.execute(
+        """SELECT work_date, clock_in, clock_out, leave_type
+           FROM attendance_days
+           WHERE emp_no=? AND work_date >= ? AND work_date <= ?""",
+        (emp_no, start.isoformat(), end.isoformat()),
+    ).fetchall()
+    by_date = {r["work_date"]: r for r in rows}
+    filled = 0
+    cursor = start
+    while cursor <= end:
+        if is_business_day(cursor):
+            wd = cursor.isoformat()
+            existing = by_date.get(wd)
+            leave = ""
+            cin = ""
+            cout = ""
+            if existing:
+                if "leave_type" in existing.keys() and existing["leave_type"]:
+                    leave = str(existing["leave_type"])
+                cin = (existing["clock_in"] or "").strip()
+                cout = (existing["clock_out"] or "").strip()
+            if leave not in ("有給", "欠勤") and not cin and not cout:
+                if existing:
+                    conn.execute(
+                        """UPDATE attendance_days
+                           SET clock_in=?, clock_out=?, break_minutes=0,
+                               overtime_minutes=0, on_break=0, break_started_at=NULL
+                           WHERE emp_no=? AND work_date=?""",
+                        ("0:00", "0:00", emp_no, wd),
+                    )
+                else:
+                    conn.execute(
+                        """INSERT INTO attendance_days(
+                             emp_no, work_date, clock_in, clock_out,
+                             break_minutes, overtime_minutes, on_break, force_work, leave_type
+                           ) VALUES (?,?,?,?,0,0,0,0,'')""",
+                        (emp_no, wd, "0:00", "0:00"),
+                    )
+                filled += 1
+        cursor += timedelta(days=1)
+    return filled
+
+
 def month_days_payload(emp_no: str, year: int, month: int) -> list:
     """対象月の日次一覧。一括SELECTで Neon でも初回表示がタイムアウトしにくくする。"""
     from logic import is_business_day
@@ -363,6 +434,9 @@ def month_days_payload(emp_no: str, year: int, month: int) -> list:
         return []
 
     with db.get_conn() as conn:
+        fill_empty_business_days(conn, emp_no, start, end)
+        conn.commit()
+
         rows = conn.execute(
             """SELECT emp_no, work_date, clock_in, clock_out, break_minutes,
                       on_break, break_started_at, overtime_minutes, force_work, leave_type
@@ -403,7 +477,6 @@ def month_days_payload(emp_no: str, year: int, month: int) -> list:
             cursor += timedelta(days=1)
     return result
 
-
 def missing_and_break_counts(emp_no: str, year: int, month: int) -> tuple:
     from logic import is_business_day
 
@@ -427,7 +500,52 @@ def missing_and_break_counts(emp_no: str, year: int, month: int) -> tuple:
 
 _schema_ready = False
 _seed_started = False
+_backfill_started = False
 _init_lock = threading.Lock()
+
+
+def backfill_empty_attendance_zeros() -> dict:
+    """今日より前の、出勤・退勤が入っていない営業日を 0:00 / 0:00 / 0 / 0 で埋める。
+    本日は打刻できるよう空のままにする。有給・欠勤・休日は対象外。
+    """
+    today = today_tokyo()
+    filled = 0
+    with db.get_conn() as conn:
+        employees = conn.execute(
+            "SELECT emp_no FROM employees WHERE active=1"
+        ).fetchall()
+        if not employees:
+            return {"filled": 0, "employees": 0}
+
+        start_row = conn.execute(
+            "SELECT MIN(work_date) AS m FROM attendance_days"
+        ).fetchone()
+        if start_row and start_row["m"]:
+            start = date.fromisoformat(str(start_row["m"])[:10])
+        else:
+            created = conn.execute(
+                "SELECT MIN(created_at) AS m FROM employees"
+            ).fetchone()
+            if created and created["m"]:
+                start = date.fromisoformat(str(created["m"])[:10])
+            else:
+                start = date(today.year, 1, 1)
+
+        end = today - timedelta(days=1)
+        if start > end:
+            return {"filled": 0, "employees": len(employees)}
+
+        for emp in employees:
+            filled += fill_empty_business_days(conn, emp["emp_no"], start, end)
+        conn.commit()
+    return {"filled": filled, "employees": len(employees)}
+
+def _backfill_zeros_background() -> None:
+    try:
+        result = backfill_empty_attendance_zeros()
+        print(f"[backfill] empty days as 0:00: {result}", flush=True)
+    except Exception as exc:
+        print(f"[backfill] failed: {exc}", flush=True)
 
 
 def _seed_demo_background() -> None:
@@ -436,15 +554,17 @@ def _seed_demo_background() -> None:
 
         result = load_demo_data(force=True)
         print(f"[seed] demo loaded: {result}", flush=True)
+        # デモ投入後にも未入力営業日を埋める
+        _backfill_zeros_background()
     except Exception as exc:
         print(f"[seed] demo failed: {exc}", flush=True)
 
 
 @app.before_request
 def _init():
-    """スキーマは一度だけ。重いデモ投入はバックグラウンドで行い Worker Timeout を防ぐ。"""
-    global _schema_ready, _seed_started
-    if _schema_ready and _seed_started:
+    """スキーマは一度だけ。重いデモ投入・埋戻しはバックグラウンドで行い Worker Timeout を防ぐ。"""
+    global _schema_ready, _seed_started, _backfill_started
+    if _schema_ready and _seed_started and _backfill_started:
         return
     with _init_lock:
         if not _schema_ready:
@@ -457,7 +577,22 @@ def _init():
                 threading.Thread(
                     target=_seed_demo_background, name="demo-seed", daemon=True
                 ).start()
-
+                _backfill_started = True  # seed スレッド側で backfill する
+            else:
+                # 既存DB: 未入力の営業日を 0:00 で埋める
+                _backfill_started = True
+                threading.Thread(
+                    target=_backfill_zeros_background,
+                    name="zero-backfill",
+                    daemon=True,
+                ).start()
+        elif not _backfill_started:
+            _backfill_started = True
+            threading.Thread(
+                target=_backfill_zeros_background,
+                name="zero-backfill",
+                daemon=True,
+            ).start()
 
 @app.route("/")
 def index():
@@ -1077,34 +1212,44 @@ def admin_logs():
     rows = db.fetchall(
         "SELECT * FROM change_logs ORDER BY id DESC LIMIT 500"
     )
+    emp_rows = db.fetchall("SELECT emp_no, name FROM employees")
+    emp_names = {e["emp_no"]: e["name"] for e in emp_rows}
     out = []
     for r in rows:
         # 通常打刻は変更履歴に含めない（後からの修正・承認・差戻しのみ）
         if (r["reason"] or "") == "打刻":
             continue
-        emp = db.fetchone("SELECT name FROM employees WHERE emp_no=?", (r["emp_no"],))
-        name = emp["name"] if emp else r["emp_no"]
-        created = r["created_at"]
+        emp_no = r["emp_no"] or ""
+        name = emp_names.get(emp_no) or emp_no
+        created = r["created_at"] or ""
         reason = r["reason"] or ""
-        if not log_date_matches(created, q_date):
+        field_name = r["field_name"] or ""
+        work_date = r["work_date"] or ""
+
+        if q_date and not (
+            log_date_matches(created, q_date) or log_date_matches(work_date, q_date)
+        ):
             continue
-        if q_emp and q_emp not in r["emp_no"] and q_emp not in name:
+        if q_emp and not (text_matches(name, q_emp) or text_matches(emp_no, q_emp)):
             continue
-        if q_changer and q_changer not in r["changer"]:
+        if q_changer and not text_matches(r["changer"] or "", q_changer):
             continue
-        if q_reason and q_reason not in reason:
+        # 理由／ステータス列＋変更項目も部分一致対象
+        if q_reason and not (
+            text_matches(reason, q_reason) or text_matches(field_name, q_reason)
+        ):
             continue
         out.append(
             {
                 "created_at": created,
                 "display_date": format_log_date(created),
-                "changer": r["changer"],
+                "changer": r["changer"] or "",
                 "employee": name,
-                "field_name": r["field_name"],
+                "field_name": field_name,
                 "old_value": r["old_value"] or "—",
                 "new_value": r["new_value"] or "—",
                 "reason": reason,
-                "work_date": r["work_date"] or "",
+                "work_date": work_date,
             }
         )
     return json_ok({"rows": out})

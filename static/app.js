@@ -109,7 +109,7 @@
     var ym = state.adminMonth || defaultMonthKey();
     var startMd = parseInt(ym.split("-")[1], 10) + "/1";
     var endIso = state.dashboardRangeEnd || monthRangeEndIso(ym);
-    return startMd + " ~ " + formatMonthDay(endIso) + "までの" + base;
+    return startMd + "~" + formatMonthDay(endIso) + "の" + base;
   }
 
   function updateMissingBreakLabels() {
@@ -272,7 +272,9 @@
     }
     if (id === "a04") {
       withError(function () {
-        return withLoading(refreshLogs);
+        return withLoading(function () {
+          return refreshLogs({ searching: false });
+        }, "検索しています...");
       })();
     }
     if (id === "a05") {
@@ -394,7 +396,9 @@
           ? "休不足"
           : d.status === "休日"
             ? "休日"
-            : d.status;
+            : d.status === "未入力"
+              ? "本日未入力"
+              : d.status;
       if (editable) {
         var statusCell;
         if (d.is_holiday) {
@@ -406,7 +410,7 @@
             ">休日</option>" +
             '<option value="work"' +
             (mode === "work" ? " selected" : "") +
-            ">未入力</option>" +
+            ">本日未入力</option>" +
             "</select>";
         } else if (d.status_kind === "missing" || d.status_kind === "leave") {
           var leaveMode =
@@ -419,7 +423,7 @@
             '<select class="input e02-mode">' +
             '<option value="work"' +
             (leaveMode === "work" ? " selected" : "") +
-            ">未入力</option>" +
+            ">本日未入力</option>" +
             '<option value="paid_leave"' +
             (leaveMode === "paid_leave" ? " selected" : "") +
             ">有給</option>" +
@@ -581,9 +585,8 @@
     state.dashboardLists = data.lists || {};
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
-    var dayUnit = state.dashboardScope === "day" ? "人" : "件";
-    $("kpi-missing").textContent = data.kpi.missing + dayUnit;
-    $("kpi-break").textContent = data.kpi.break_short + dayUnit;
+    $("kpi-missing").textContent = data.kpi.missing + "件";
+    $("kpi-break").textContent = data.kpi.break_short + "件";
     updateMissingBreakLabels();
   }
 
@@ -756,7 +759,18 @@
     state.detailEmp = empNo;
   }
 
-  async function refreshLogs() {
+  var logsSearchTimer = null;
+  var logsSearchSeq = 0;
+
+  async function refreshLogs(opts) {
+    opts = opts || {};
+    var searching = !!opts.searching;
+    var seq = ++logsSearchSeq;
+    var body = $("a04-body");
+    if (searching) {
+      body.innerHTML =
+        '<tr><td colspan="7">検索しています...</td></tr>';
+    }
     var q =
       "/api/admin/logs?date=" +
       encodeURIComponent($("a04-date").value || "") +
@@ -767,11 +781,16 @@
       "&reason=" +
       encodeURIComponent($("a04-reason").value || "");
     var data = await api(q);
-    var body = $("a04-body");
+    if (seq !== logsSearchSeq) return;
     body.innerHTML = "";
+    if (!data.rows || data.rows.length === 0) {
+      body.innerHTML =
+        '<tr><td colspan="7">該当する変更履歴はありません</td></tr>';
+      return;
+    }
     data.rows.forEach(function (r) {
       var tr = document.createElement("tr");
-      var day = formatDisplayDate(r.display_date || r.created_at);
+      var day = r.display_date || formatDisplayDate(r.created_at);
       tr.innerHTML =
         "<td>" +
         day +
@@ -790,6 +809,16 @@
         "</td>";
       body.appendChild(tr);
     });
+  }
+
+  function scheduleLogsSearch() {
+    if (logsSearchTimer) clearTimeout(logsSearchTimer);
+    logsSearchTimer = setTimeout(function () {
+      logsSearchTimer = null;
+      withError(function () {
+        return refreshLogs({ searching: true });
+      })();
+    }, 250);
   }
 
   async function refreshEmployees() {
@@ -1000,11 +1029,14 @@
     var titleEl = $("punch-modal-title");
     var msgEl = $("punch-modal-msg");
     var modal = $("punch-modal");
+    var panel = modal ? modal.querySelector(".modal-panel-compact") : null;
+    var msg = message || "";
     if (titleEl) titleEl.textContent = title || "読み込み中";
     if (msgEl) {
-      msgEl.textContent =
-        message || "処理しています。しばらくお待ちください。";
+      msgEl.textContent = msg;
+      msgEl.classList.toggle("is-hidden", !msg);
     }
+    if (panel) panel.classList.toggle("is-single-line", !msg);
     if (modal) modal.classList.remove("is-hidden");
   }
 
@@ -1013,6 +1045,7 @@
     var titleEl = $("punch-modal-title");
     var msgEl = $("punch-modal-msg");
     var modal = $("punch-modal");
+    var panel = modal ? modal.querySelector(".modal-panel-compact") : null;
 
     function finish() {
       busyDepth = Math.max(0, busyDepth - 1);
@@ -1022,8 +1055,10 @@
     }
 
     if (okMessage && busyDepth <= 1 && titleEl && msgEl && modal) {
-      titleEl.textContent = "記録完了";
-      msgEl.textContent = okMessage;
+      titleEl.textContent = okMessage;
+      msgEl.textContent = "";
+      msgEl.classList.add("is-hidden");
+      if (panel) panel.classList.add("is-single-line");
       setTimeout(finish, 600);
       return;
     }
@@ -1032,8 +1067,8 @@
 
   function showPunchSaving(message) {
     showBusy(
-      "記録中",
-      message || "サーバに保存しています。完了するまでタブを閉じないでください。"
+      message || "記録しています…",
+      ""
     );
   }
 
@@ -1042,10 +1077,7 @@
   }
 
   function showLoading(message) {
-    showBusy(
-      "読み込み中",
-      message || "処理しています。しばらくお待ちください。"
-    );
+    showBusy(message || "読み込み中", "");
   }
 
   function hideLoading() {
@@ -1327,7 +1359,7 @@
   });
 
   ["a04-date", "a04-changer", "a04-emp", "a04-reason"].forEach(function (id) {
-    $(id).addEventListener("input", withError(refreshLogs));
+    $(id).addEventListener("input", scheduleLogsSearch);
   });
 
   $("btn-csv").addEventListener("click", function () {
