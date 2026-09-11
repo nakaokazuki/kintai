@@ -1329,6 +1329,17 @@ def admin_deactivate(emp_no):
     return json_ok()
 
 
+@app.post("/api/admin/employees/<emp_no>/activate")
+@require_admin
+def admin_activate(emp_no):
+    emp = db.fetchone("SELECT emp_no FROM employees WHERE emp_no=?", (emp_no,))
+    if not emp:
+        return json_err("社員が見つかりません", 404)
+    db.execute("UPDATE employees SET active=1 WHERE emp_no=?", (emp_no,))
+    add_log("管理者", emp_no, None, "社員有効化", "無効", "有効", "")
+    return json_ok()
+
+
 @app.get("/api/admin/csv")
 @require_admin
 def admin_csv():

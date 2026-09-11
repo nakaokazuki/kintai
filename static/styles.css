@@ -133,11 +133,36 @@ select {
 .header-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
+  align-items: center;
 }
 
 .mb {
   margin-bottom: 12px;
+}
+
+/* 画面遷移用：押し間違い防止のため大きめのボタン */
+.btn-nav {
+  min-height: 52px;
+  min-width: 7.5em;
+  padding: 14px 20px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.2;
+  background: #eaf2fa;
+  border: 2px solid var(--primary);
+  color: var(--primary);
+  border-radius: 10px;
+}
+
+.btn-nav:hover:not(:disabled) {
+  background: #d7e6f5;
+}
+
+.btn-nav:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--soft);
 }
 
 .linkish {
@@ -648,7 +673,9 @@ select {
 }
 
 .kpi-emp-link {
-  font-size: 1rem;
+  width: 100%;
+  text-align: left;
+  min-width: 0;
 }
 
 .action-row {
@@ -738,10 +765,11 @@ select {
   font-weight: 800;
 }
 
-/* ---- A-05 社員名リンク ---- */
+/* ---- A-05 社員名（詳細へ） ---- */
 .emp-name-link {
-  font: inherit;
-  padding: 0;
+  width: 100%;
+  min-width: 8em;
+  text-align: left;
 }
 
 /* ---- A-03 月次詳細 ---- */
@@ -757,7 +785,7 @@ select {
 }
 
 .a03-back {
-  color: var(--primary);
+  flex-shrink: 0;
 }
 
 .a03-meta-row {

@@ -639,7 +639,7 @@
         var li = document.createElement("li");
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "linkish kpi-emp-link";
+        btn.className = "btn btn-nav kpi-emp-link";
         btn.textContent = e.name + "（" + e.emp_no + "）";
         btn.addEventListener("click", function () {
           state.detailEmp = e.emp_no;
@@ -851,7 +851,7 @@
       var tdName = document.createElement("td");
       var nameBtn = document.createElement("button");
       nameBtn.type = "button";
-      nameBtn.className = "linkish emp-name-link";
+      nameBtn.className = "btn btn-nav emp-name-link";
       nameBtn.textContent = e.name;
       nameBtn.addEventListener("click", function () {
         state.detailEmp = e.emp_no;
@@ -863,11 +863,11 @@
       tdStatus.textContent = e.active ? "有効" : "無効";
       var tdAction = document.createElement("td");
       if (e.active) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn btn-tiny btn-warn";
-        btn.textContent = "無効化";
-        btn.addEventListener(
+        var btnOff = document.createElement("button");
+        btnOff.type = "button";
+        btnOff.className = "btn btn-tiny btn-warn";
+        btnOff.textContent = "無効化";
+        btnOff.addEventListener(
           "click",
           withError(async function () {
             if (!confirm(e.emp_no + " を無効化しますか？")) return;
@@ -880,7 +880,26 @@
             }, "無効化しています");
           })
         );
-        tdAction.appendChild(btn);
+        tdAction.appendChild(btnOff);
+      } else {
+        var btnOn = document.createElement("button");
+        btnOn.type = "button";
+        btnOn.className = "btn btn-tiny btn-ok";
+        btnOn.textContent = "有効化";
+        btnOn.addEventListener(
+          "click",
+          withError(async function () {
+            if (!confirm(e.emp_no + " を有効化しますか？")) return;
+            await withLoading(async function () {
+              await api("/api/admin/employees/" + e.emp_no + "/activate", {
+                method: "POST",
+                body: "{}"
+              });
+              await refreshEmployees();
+            }, "有効化しています");
+          })
+        );
+        tdAction.appendChild(btnOn);
       }
       tr.appendChild(tdNo);
       tr.appendChild(tdName);
