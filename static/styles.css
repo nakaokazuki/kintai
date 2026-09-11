@@ -157,39 +157,6 @@ select {
   cursor: not-allowed;
 }
 
-/* 勤怠システム（社員）画面：白背景の白黒ボタン */
-#e01 .btn,
-#e01 .btn:hover,
-#e01 .btn:focus,
-#e01 .btn:active,
-#e01 .btn:disabled,
-#e01 .btn.btn-nav,
-#e01 .btn.btn-in,
-#e01 .btn.btn-break,
-#e01 .btn.btn-out,
-#e01 .btn.btn-secondary,
-#e01 .btn.btn-tint-sky,
-#e01 .btn.btn-tint-mint,
-#e01 .btn.btn-tint-lavender,
-#e01 .btn.btn-tint-peach,
-#e01 .btn.btn-tint-sand,
-#e01 .btn.btn-tint-mist,
-#e01 .btn.btn-tint-teal,
-#e01 .btn.btn-tint-orange,
-#e01 .btn.btn-tint-indigo,
-#e01 .btn.btn-tint-cyan {
-  background: #ffffff;
-  border-color: #1a2330;
-  color: #1a2330;
-}
-
-#e01 .btn:disabled {
-  opacity: 0.45;
-  background: #ffffff;
-  border-color: #1a2330;
-  color: #1a2330;
-}
-
 .linkish {
   background: none;
   border: none;
