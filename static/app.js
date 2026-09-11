@@ -11,9 +11,7 @@
     dashboardScope: "month",
     detailEmp: null,
     pendingAdminScreen: null,
-    empBusy: false,
-    submitMissingCount: 0,
-    submitStatusOk: false
+    empBusy: false
   };
 
   function $(id) {
@@ -474,12 +472,14 @@
       if (editable) {
         var statusCell;
         var timeDisabled = false;
-        // 未来の平日（および未来の有給）：有給をプルダウン選択可
+        // 未来の平日（および未来の有給・欠勤）：有給・欠勤をプルダウン選択可
         if (isFuture && (!d.is_holiday || d.status_kind === "leave")) {
           var futureMode =
-            d.day_mode === "paid_leave" || d.status_kind === "leave"
+            d.day_mode === "paid_leave"
               ? "paid_leave"
-              : "future";
+              : d.day_mode === "absent"
+                ? "absent"
+                : "future";
           statusCell =
             '<select class="input e02-mode">' +
             '<option value="future"' +
@@ -488,15 +488,26 @@
             '<option value="paid_leave"' +
             (futureMode === "paid_leave" ? " selected" : "") +
             ">有給</option>" +
+            '<option value="absent"' +
+            (futureMode === "absent" ? " selected" : "") +
+            ">欠勤</option>" +
             "</select>";
-          timeDisabled = futureMode === "paid_leave";
-          if (futureMode === "paid_leave") tr.className = "row-leave";
+          timeDisabled =
+            futureMode === "paid_leave" || futureMode === "absent";
+          if (timeDisabled) tr.className = "row-leave";
         } else if (isFuture && d.is_holiday) {
           // 未来の土日祝は表示のみ
           statusCell = statusText || "休日";
           timeDisabled = true;
         } else if (d.is_holiday) {
-          var mode = d.day_mode === "work" ? "work" : "holiday";
+          var mode =
+            d.day_mode === "work"
+              ? "work"
+              : d.day_mode === "absent"
+                ? "absent"
+                : d.day_mode === "paid_leave"
+                  ? "paid_leave"
+                  : "holiday";
           statusCell =
             '<select class="input e02-mode">' +
             '<option value="holiday"' +
@@ -505,8 +516,20 @@
             '<option value="work"' +
             (mode === "work" ? " selected" : "") +
             ">本日未入力</option>" +
+            '<option value="paid_leave"' +
+            (mode === "paid_leave" ? " selected" : "") +
+            ">有給</option>" +
+            '<option value="absent"' +
+            (mode === "absent" ? " selected" : "") +
+            ">欠勤</option>" +
             "</select>";
-          timeDisabled = mode !== "work";
+          timeDisabled =
+            mode === "holiday" ||
+            mode === "paid_leave" ||
+            mode === "absent";
+          if (mode === "paid_leave" || mode === "absent") {
+            tr.className = "row-leave";
+          }
         } else if (d.status_kind === "missing" || d.status_kind === "leave") {
           var leaveMode =
             d.day_mode === "paid_leave"
@@ -593,7 +616,10 @@
             tr.classList.toggle("row-missing", v === "work");
             tr.classList.toggle(
               "row-future",
-              v === "future" || (tr.dataset.isFuture === "1" && v !== "paid_leave")
+              v === "future" ||
+                (tr.dataset.isFuture === "1" &&
+                  v !== "paid_leave" &&
+                  v !== "absent")
             );
             ["e02-in", "e02-out", "e02-br"].forEach(function (cls) {
               var inp = tr.querySelector("." + cls);
@@ -1042,23 +1068,6 @@
     });
   }
 
-  function syncSubmitButton() {
-    var btn = $("btn-do-submit");
-    var resign = $("submit-resign");
-    var missing = state.submitMissingCount || 0;
-    var statusOk = !!state.submitStatusOk;
-    var resignOn = !!(resign && resign.checked);
-    var can = statusOk && (missing === 0 || resignOn);
-    btn.disabled = !can;
-    if (can && resignOn && missing > 0) {
-      btn.textContent = "提出する（退職）";
-    } else if (can) {
-      btn.textContent = "提出する";
-    } else {
-      btn.textContent = "提出する（未入力あり）";
-    }
-  }
-
   async function openSubmitModal() {
     var data;
     try {
@@ -1097,30 +1106,16 @@
     $("submit-hint").textContent =
       data.messages.join("。") ||
       (data.can_submit ? "問題なければ提出してください。" : "");
-
-    state.submitMissingCount = data.missing_count || 0;
-    state.submitStatusOk =
-      data.submission.status === "未提出" || data.submission.status === "差戻し";
-
-    var resign = $("submit-resign");
-    var resignWrap = $("submit-resign-wrap");
-    resign.checked = false;
-    // 未入力があるときだけ退職提出チェックを表示
-    if (state.submitMissingCount > 0 && state.submitStatusOk) {
-      resignWrap.classList.remove("is-hidden");
-    } else {
-      resignWrap.classList.add("is-hidden");
-    }
-    syncSubmitButton();
+    var btn = $("btn-do-submit");
+    btn.disabled = !data.can_submit;
+    btn.textContent = data.can_submit
+      ? "提出する"
+      : "提出する（未入力あり）";
     $("submit-modal").classList.remove("is-hidden");
   }
 
   function closeSubmitModal() {
     $("submit-modal").classList.add("is-hidden");
-    var resign = $("submit-resign");
-    if (resign) resign.checked = false;
-    var resignWrap = $("submit-resign-wrap");
-    if (resignWrap) resignWrap.classList.add("is-hidden");
   }
 
   function openAdminModal() {
@@ -1488,19 +1483,10 @@
   $("btn-do-submit").addEventListener(
     "click",
     withError(async function () {
-      var resign = $("submit-resign");
-      var resignOn = !!(
-        resign &&
-        resign.checked &&
-        (state.submitMissingCount || 0) > 0
-      );
       await withLoading(async function () {
         await api("/api/employee/submit", {
           method: "POST",
-          body: JSON.stringify({
-            month: state.empMonth || currentMonthKey(),
-            resign_submit: resignOn
-          })
+          body: JSON.stringify({ month: state.empMonth || currentMonthKey() })
         });
       }, "提出しています");
       closeSubmitModal();
@@ -1508,16 +1494,6 @@
       await withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
     })
   );
-
-  $("submit-resign").addEventListener("change", function () {
-    var resign = $("submit-resign");
-    if (resign.checked) {
-      if (!confirm("チェックを入れますか？")) {
-        resign.checked = false;
-      }
-    }
-    syncSubmitButton();
-  });
 
   $("e02-prev").addEventListener("click", function () {
     state.empMonth = shiftMonth(state.empMonth || currentMonthKey(), -1);

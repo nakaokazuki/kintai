@@ -331,7 +331,19 @@ def apply_day_edits(
             old_leave = str(row["leave_type"])
         new_leave = old_leave
         if not is_business_day(d):
-            if day_mode == "holiday":
+            if day_mode == "paid_leave":
+                new_force = 0
+                new_in = None
+                new_out = None
+                new_br = 0
+                new_leave = "有給"
+            elif day_mode == "absent":
+                new_force = 0
+                new_in = None
+                new_out = None
+                new_br = 0
+                new_leave = "欠勤"
+            elif day_mode == "holiday":
                 new_force = 0
                 new_in = None
                 new_out = None
@@ -925,12 +937,12 @@ def submit_check(emp):
 @app.post("/api/employee/submit")
 @require_employee
 def employee_submit(emp):
-    body = request.json or {}
-    ym = body.get("month") or month_key(today_tokyo().year, today_tokyo().month)
-    resign_submit = bool(body.get("resign_submit"))
+    ym = (request.json or {}).get("month") or month_key(
+        today_tokyo().year, today_tokyo().month
+    )
     year, month = parse_month_key(ym)
     missing, break_short, _ = missing_and_break_counts(emp["emp_no"], year, month)
-    if missing > 0 and not resign_submit:
+    if missing > 0:
         return json_err(f"未入力が{missing}件あるため提出できません")
     sub = get_or_create_submission(emp["emp_no"], ym)
     if sub["status"] not in ("未提出", "差戻し"):
@@ -942,21 +954,11 @@ def employee_submit(emp):
            WHERE emp_no=? AND year_month=?""",
         (now, emp["emp_no"], ym),
     )
-    reason = "退職するため提出" if resign_submit and missing > 0 else ""
-    add_log(
-        emp["emp_no"],
-        emp["emp_no"],
-        None,
-        "月次提出",
-        sub["status"],
-        "提出済み",
-        reason,
-    )
+    add_log(emp["emp_no"], emp["emp_no"], None, "月次提出", sub["status"], "提出済み", "")
     return json_ok(
         {
             "submission": get_or_create_submission(emp["emp_no"], ym),
             "break_short_count": break_short,
-            "resign_submit": bool(resign_submit and missing > 0),
         }
     )
 
