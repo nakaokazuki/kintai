@@ -457,15 +457,30 @@ def fill_empty_business_days(
     return filled
 
 
+def display_limit_date(today: Optional[date] = None) -> date:
+    """月次一覧などの表示上限：今日基準で翌月の末日まで。"""
+    if today is None:
+        today = today_tokyo()
+    if today.month == 12:
+        y, m = today.year + 1, 1
+    else:
+        y, m = today.year, today.month + 1
+    return date(y, m, calendar.monthrange(y, m)[1])
+
+
 def month_days_payload(emp_no: str, year: int, month: int) -> list:
-    """対象月の日次一覧。一括SELECTで Neon でも初回表示がタイムアウトしにくくする。"""
+    """対象月の日次一覧。一括SELECTで Neon でも初回表示がタイムアウトしにくくする。
+    表示は翌月末まで（今日より先の日も行として出す）。
+    """
     from logic import is_business_day
 
     days_in_month = calendar.monthrange(year, month)[1]
     today = today_tokyo()
+    limit = display_limit_date(today)
     start = date(year, month, 1)
-    end = min(date(year, month, days_in_month), today)
-    if start > today:
+    month_end = date(year, month, days_in_month)
+    end = min(month_end, limit)
+    if start > limit:
         return []
 
     with db.get_conn() as conn:
@@ -490,6 +505,7 @@ def month_days_payload(emp_no: str, year: int, month: int) -> list:
             info["weekday"] = WEEKDAYS[cursor.weekday()]
             info["is_weekend"] = cursor.weekday() >= 5
             info["is_holiday"] = not is_business_day(cursor)
+            info["is_future"] = cursor > today
             if info["leave_type"] in ("有給", "欠勤"):
                 info["status"] = info["leave_type"]
                 info["status_kind"] = "leave"
@@ -506,6 +522,12 @@ def month_days_payload(emp_no: str, year: int, month: int) -> list:
                 info["status"] = "休日"
                 info["status_kind"] = "holiday"
                 info["day_mode"] = "holiday"
+            elif cursor > today:
+                # 未来日は行だけ表示（未入力扱い・提出阻害にしない）
+                info["status"] = "—"
+                info["status_kind"] = "future"
+                info["day_mode"] = "future"
+                info["break_short"] = False
             else:
                 info["day_mode"] = "work"
             result.append(info)
@@ -516,10 +538,13 @@ def missing_and_break_counts(emp_no: str, year: int, month: int) -> tuple:
     from logic import is_business_day
 
     days = month_days_payload(emp_no, year, month)
+    today = today_tokyo()
     missing = 0
     break_short = 0
     for d in days:
         work_date = date.fromisoformat(d["work_date"])
+        if work_date > today:
+            continue
         if not is_business_day(work_date):
             continue
         if d["status_kind"] == "leave":
@@ -990,6 +1015,7 @@ def admin_dashboard():
 
     employees = db.fetchall("SELECT emp_no, name FROM employees WHERE active=1 ORDER BY emp_no")
     unsubmitted_list: list[dict] = []
+    submitted_list: list[dict] = []
     pending_list: list[dict] = []
     missing_list: list[dict] = []
     break_list: list[dict] = []
@@ -1011,8 +1037,10 @@ def admin_dashboard():
         # 差戻し後は未提出扱い（旧データの「差戻し」ステータスも未提出カウントに含める）
         if status in ("未提出", "差戻し"):
             unsubmitted_list.append(emp_label(emp))
-        elif status == "提出済み":
-            pending_list.append(emp_label(emp))
+        elif status in ("提出済み", "承認済み"):
+            submitted_list.append(emp_label(emp))
+            if status == "提出済み":
+                pending_list.append(emp_label(emp))
 
     days_in_month = calendar.monthrange(year, month)[1]
     month_start = date(year, month, 1)
@@ -1114,12 +1142,14 @@ def admin_dashboard():
             "range_end": range_end.isoformat(),
             "kpi": {
                 "unsubmitted": len(unsubmitted_list),
+                "submitted": len(submitted_list),
                 "pending": len(pending_list),
                 "missing": missing_value,
                 "break_short": break_value,
             },
             "lists": {
                 "unsubmitted": unsubmitted_list,
+                "submitted": submitted_list,
                 "pending": pending_list,
                 "missing": missing_list,
                 "break_short": break_list,
@@ -1202,6 +1232,16 @@ def admin_detail():
     days = month_days_payload(emp_no, year, month)
     total_work = sum(d["work_minutes"] for d in days)
     total_ot = sum(d["overtime_minutes"] for d in days)
+    # 法定休日出勤：日曜日に実際に働いた時間（0:00埋戻し・有給欠勤は除外）
+    total_holiday_work = 0
+    for d in days:
+        if d.get("weekday") != "日":
+            continue
+        if d.get("status_kind") == "leave":
+            continue
+        if is_zero_clock_pair(d.get("clock_in"), d.get("clock_out")):
+            continue
+        total_holiday_work += int(d.get("work_minutes") or 0)
     sub = get_or_create_submission(emp_no, ym)
     return json_ok(
         {
@@ -1211,6 +1251,7 @@ def admin_detail():
             "summary": {
                 "work_hours": round(total_work / 60, 1),
                 "overtime_hours": round(total_ot / 60, 1),
+                "holiday_work_hours": round(total_holiday_work / 60, 1),
             },
             "submission": sub,
         }

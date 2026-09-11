@@ -7,8 +7,8 @@
   --muted: #5a6a7a;
   --line: #b8c5d4;
   --primary: #2a5f9e;
-  --in: #ffffff;
-  --in-bg: #2f8f5b;
+  --in: #1f6b42;
+  --in-bg: #ddf3e4;
   --out: #8a3a3a;
   --out-bg: #f7e8e8;
   --soft: #e8eef5;
@@ -83,7 +83,7 @@ select {
 }
 
 .kpi-grid {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .btn-punch {
@@ -150,19 +150,80 @@ select {
   font-weight: 800;
   line-height: 1.2;
   background: #eaf2fa;
-  border: 2px solid var(--primary);
-  color: var(--primary);
+  border: 2px solid #9bb8d9;
+  color: #2a5f9e;
   border-radius: 10px;
 }
 
 .btn-nav:hover:not(:disabled) {
-  background: #d7e6f5;
+  background: #dceaf7;
 }
 
 .btn-nav:disabled {
   border-color: var(--line);
   color: var(--muted);
   background: var(--soft);
+}
+
+/* 並びボタン用：淡い色で役割を区別 */
+.btn-tint-sky {
+  background: #e8f3fc;
+  border-color: #9bb8d9;
+  color: #2a5f9e;
+}
+
+.btn-tint-sky:hover:not(:disabled) {
+  background: #d7e8f7;
+}
+
+.btn-tint-mint {
+  background: #e6f6ec;
+  border-color: #9dcfad;
+  color: #1f6b42;
+}
+
+.btn-tint-mint:hover:not(:disabled) {
+  background: #d5efde;
+}
+
+.btn-tint-lavender {
+  background: #f1ecf8;
+  border-color: #b9a8d6;
+  color: #5a4580;
+}
+
+.btn-tint-lavender:hover:not(:disabled) {
+  background: #e6ddf2;
+}
+
+.btn-tint-peach {
+  background: #fff1ea;
+  border-color: #e0b5a4;
+  color: #8a4a38;
+}
+
+.btn-tint-peach:hover:not(:disabled) {
+  background: #ffe6db;
+}
+
+.btn-tint-sand {
+  background: #f7f3e8;
+  border-color: #d4c6a0;
+  color: #6b5a2e;
+}
+
+.btn-tint-sand:hover:not(:disabled) {
+  background: #efe8d6;
+}
+
+.btn-tint-mist {
+  background: #eef2f6;
+  border-color: #b8c5d4;
+  color: #3a4a5c;
+}
+
+.btn-tint-mist:hover:not(:disabled) {
+  background: #e2e8ef;
 }
 
 .linkish {
@@ -378,39 +439,55 @@ select {
 }
 
 .btn-in {
-  background: var(--in-bg);
-  border-color: #247a4c;
-  color: var(--in);
+  background: #ddf3e4;
+  border-color: #9dcfad;
+  color: #1f6b42;
 }
 
 .btn-out {
-  background: var(--out-bg);
+  background: #f7e8e8;
   border-color: #d4a0a0;
-  color: var(--out);
+  color: #8a3a3a;
 }
 
 .btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  background: #e4eef9;
+  color: #1f4a7a;
+  border-color: #9bb8d9;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #d3e4f4;
 }
 
 .btn-secondary {
-  background: #fff;
-  border-color: var(--line);
-  color: var(--text);
+  background: #f3f0f7;
+  border-color: #c5bdd4;
+  color: #4a3f5c;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e8e3ef;
 }
 
 .btn-ok {
-  background: var(--ok-bg);
+  background: #ddf3e4;
   border-color: #9dcfad;
-  color: var(--ok);
+  color: #1f6b42;
+}
+
+.btn-ok:hover:not(:disabled) {
+  background: #ccecda;
 }
 
 .btn-warn {
-  background: var(--warn-bg);
+  background: #fff4cc;
   border-color: #e0c36a;
-  color: var(--warn);
+  color: #7a5a00;
+}
+
+.btn-warn:hover:not(:disabled) {
+  background: #ffedb0;
 }
 
 .btn-block {
@@ -534,6 +611,11 @@ select {
   color: var(--primary);
 }
 
+.row-future {
+  background: #f7fafc;
+  color: var(--muted);
+}
+
 .e02-mode,
 .a03-mode {
   min-width: 5.5rem;
@@ -573,7 +655,7 @@ select {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -703,9 +785,9 @@ select {
 }
 
 #a01 .action-row-full .btn-secondary {
-  background: #eaf2fa;
-  border-color: #c5d6e8;
-  color: #1f4a7a;
+  background: #fff1ea;
+  border-color: #e0b5a4;
+  color: #8a4a38;
 }
 
 .action-stack .btn {
@@ -812,7 +894,7 @@ select {
 
 .a03-summary {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 28px;
   background: #ffffff;
@@ -904,6 +986,11 @@ select {
   color: var(--primary);
 }
 
+.a03-table tbody tr.is-future-row {
+  background: #f7fafc;
+  color: var(--muted);
+}
+
 .a03-cell {
   width: 4.8rem;
   border: 1px solid var(--line);
@@ -977,21 +1064,21 @@ select {
 }
 
 .a03-sheet .btn-ok {
-  background: var(--ok-bg);
+  background: #ddf3e4;
   border-color: #9dcfad;
-  color: var(--ok);
+  color: #1f6b42;
 }
 
 .a03-sheet .btn-warn {
-  background: var(--warn-bg);
+  background: #fff4cc;
   border-color: #e0c36a;
-  color: var(--warn);
+  color: #7a5a00;
 }
 
 .a03-sheet .btn-secondary {
-  background: #fff;
-  border-color: var(--line);
-  color: var(--text);
+  background: #f3f0f7;
+  border-color: #c5bdd4;
+  color: #4a3f5c;
 }
 
 /* ---- A-04 全体の変更履歴 ---- */
@@ -1054,8 +1141,14 @@ select {
 
 .a04-table td {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 500;
   border-bottom: 1px solid #eef2f6;
+}
+
+.a04-table th.a04-emphasis,
+.a04-table td.a04-emphasis {
+  font-weight: 800;
+  color: var(--text);
 }
 
 .a04-table tbody tr:nth-child(even) {

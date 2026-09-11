@@ -207,7 +207,7 @@
     $("emp-id").value = data.emp_no;
     saveEmpNoLocal(data.emp_no);
     $("e01-identity").textContent =
-      "氏名：" + (data.name || "—") + "　番号：" + data.emp_no;
+      "氏名：" + (data.name || "—") + "　社員番号：" + data.emp_no;
     setSessionLabel();
     setEmployeeNavEnabled(true);
   }
@@ -232,7 +232,7 @@
     state.today = null;
     state.rejectNotices = [];
     if (state.role === "employee") state.role = null;
-    $("e01-identity").textContent = "氏名：—　番号：—";
+    $("e01-identity").textContent = "氏名：—　社員番号：—";
     $("e01-today-title").textContent = "本日";
     $("alert-break").classList.add("is-hidden");
     updatePunchButtons(null);
@@ -392,7 +392,7 @@
     state.today = data.today;
     state.rejectNotices = data.reject_notices || [];
     $("e01-identity").textContent =
-      "氏名：" + (emp.name || "—") + "　番号：" + (emp.emp_no || "—");
+      "氏名：" + (emp.name || "—") + "　社員番号：" + (emp.emp_no || "—");
     $("e01-today-title").textContent = "本日 " + formatDisplayDate(data.server_date);
     updatePunchButtons(data.today);
     setEmployeeNavEnabled(true);
@@ -453,15 +453,17 @@
     body.innerHTML = "";
     if (!data.days || data.days.length === 0) {
       body.innerHTML =
-        "<tr><td colspan=\"6\">表示できる日がありません（未来月は空です）</td></tr>";
+        "<tr><td colspan=\"6\">表示できる日がありません</td></tr>";
       return;
     }
     data.days.forEach(function (d) {
       var tr = document.createElement("tr");
+      var isFuture = !!d.is_future || d.status_kind === "future";
       if (d.status_kind === "missing") tr.className = "row-missing";
       if (d.status_kind === "break") tr.className = "row-break";
       if (d.status_kind === "holiday") tr.className = "row-holiday";
       if (d.status_kind === "leave") tr.className = "row-leave";
+      if (isFuture) tr.className = "row-future";
       tr.dataset.workDate = d.work_date;
       tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusText =
@@ -472,7 +474,8 @@
             : d.status === "未入力"
               ? "本日未入力"
               : d.status;
-      if (editable) {
+      // 未来日は表示のみ（編集しない）
+      if (editable && !isFuture) {
         var statusCell;
         if (d.is_holiday) {
           var mode = d.day_mode === "work" ? "work" : "holiday";
@@ -603,6 +606,7 @@
 
   function fillDaySelect(ym, selectedIso) {
     var sel = $("a01-day");
+    if (!sel) return;
     sel.innerHTML = "";
     var none = document.createElement("option");
     none.value = "";
@@ -618,9 +622,12 @@
     if (selectedIso === null || selectedIso === undefined) {
       pick = defaultDayForMonth(ym);
     } else {
-      pick = selectedIso;
+      pick = selectedIso || "";
     }
     if (pick && pick.slice(0, 7) !== ym) {
+      pick = "";
+    }
+    if (pick && pick > todayIso) {
       pick = "";
     }
     for (var d = 1; d <= last; d++) {
@@ -628,12 +635,15 @@
       if (iso > todayIso) continue;
       var opt = document.createElement("option");
       opt.value = iso;
-      opt.textContent = formatDisplayDate(iso);
-      if (iso === pick) opt.selected = true;
+      // 対象月の「日」の数字だけ表示（例: 1, 2, …, 31）
+      opt.textContent = String(d);
       sel.appendChild(opt);
     }
-    if (!pick) {
-      none.selected = true;
+    // 選択を明示的に反映（ブラウザ差分で selected 属性だけだとずれることがある）
+    sel.value = pick || "";
+    if (sel.value !== (pick || "")) {
+      sel.value = "";
+      pick = "";
     }
     state.adminDay = sel.value;
   }
@@ -668,11 +678,15 @@
     state.adminDay = data.date || "";
     state.dashboardScope = data.scope || "month";
     state.dashboardRangeEnd = data.range_end || monthRangeEndIso(state.adminMonth);
+    // API結果の対象日をセレクトへ反映
     if ($("a01-day").value !== state.adminDay) {
       fillDaySelect(state.adminMonth, state.adminDay);
+    } else {
+      $("a01-day").value = state.adminDay;
     }
     state.dashboardLists = data.lists || {};
     $("kpi-unsubmitted").textContent = data.kpi.unsubmitted + "人";
+    $("kpi-submitted").textContent = data.kpi.submitted + "人";
     $("kpi-pending").textContent = data.kpi.pending + "人";
     $("kpi-missing").textContent = data.kpi.missing + "件";
     $("kpi-break").textContent = data.kpi.break_short + "件";
@@ -681,6 +695,7 @@
 
   var KPI_TITLES = {
     unsubmitted: "未提出の社員",
+    submitted: "提出済みの社員",
     pending: "承認待ちの社員",
     missing: "未入力",
     break_short: "休憩不足"
@@ -709,7 +724,7 @@
         var li = document.createElement("li");
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "btn btn-nav kpi-emp-link";
+        btn.className = "btn btn-nav btn-tint-sky kpi-emp-link";
         btn.textContent = e.name + "（" + e.emp_no + "）";
         btn.addEventListener("click", function () {
           state.detailEmp = e.emp_no;
@@ -741,14 +756,20 @@
       data.summary.work_hours + '<span class="a03-unit">h</span>';
     $("a03-ot").innerHTML =
       data.summary.overtime_hours + '<span class="a03-unit">h</span>';
+    $("a03-holiday-work").innerHTML =
+      (data.summary.holiday_work_hours != null
+        ? data.summary.holiday_work_hours
+        : 0) + '<span class="a03-unit">h</span>';
     var body = $("a03-body");
     body.innerHTML = "";
     data.days.forEach(function (d) {
       var tr = document.createElement("tr");
+      var isFuture = !!d.is_future || d.status_kind === "future";
       if (d.status_kind === "missing") tr.className = "is-missing-row";
       if (d.status_kind === "break") tr.className = "is-break-row";
       if (d.status_kind === "holiday") tr.className = "is-holiday-row";
       if (d.status_kind === "leave") tr.className = "is-leave-row";
+      if (isFuture) tr.className = "is-future-row";
       tr.dataset.workDate = d.work_date;
       tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
       var statusClass =
@@ -760,9 +781,18 @@
               ? "is-leave"
               : d.status_kind === "leave"
                 ? "is-paid"
-                : "is-missing";
+                : d.status_kind === "future"
+                  ? "is-leave"
+                  : "is-missing";
       var statusCell;
-      if (d.is_holiday) {
+      if (isFuture) {
+        statusCell =
+          '<span class="a03-status ' +
+          statusClass +
+          '">' +
+          (d.status || "—") +
+          "</span>";
+      } else if (d.is_holiday) {
         var mode = d.day_mode === "work" ? "work" : "holiday";
         statusCell =
           '<select class="input a03-mode">' +
@@ -801,6 +831,7 @@
           "</span>";
       }
       var timeDisabled =
+        isFuture ||
         (d.is_holiday && d.day_mode !== "work") ||
         d.day_mode === "paid_leave" ||
         d.day_mode === "absent";
@@ -876,20 +907,20 @@
       var tr = document.createElement("tr");
       var day = r.display_date || formatDisplayDate(r.created_at);
       tr.innerHTML =
-        "<td>" +
+        '<td class="a04-emphasis">' +
         day +
-        "</td><td>" +
+        '</td><td class="a04-emphasis">' +
         r.changer +
-        "</td><td>" +
+        '</td><td class="a04-emphasis">' +
         r.employee +
+        '</td><td class="a04-emphasis">' +
+        r.reason +
         "</td><td>" +
         r.field_name +
         "</td><td>" +
         r.old_value +
         "</td><td>" +
         r.new_value +
-        "</td><td>" +
-        r.reason +
         "</td>";
       body.appendChild(tr);
     });
@@ -918,7 +949,7 @@
       var tdName = document.createElement("td");
       var nameBtn = document.createElement("button");
       nameBtn.type = "button";
-      nameBtn.className = "btn btn-nav emp-name-link";
+      nameBtn.className = "btn btn-nav btn-tint-sky emp-name-link";
       nameBtn.textContent = e.name;
       nameBtn.addEventListener("click", function () {
         state.detailEmp = e.emp_no;
@@ -1359,6 +1390,7 @@
           }
           var days = [];
           $("a03-body").querySelectorAll("tr").forEach(function (tr) {
+            if (tr.classList.contains("is-future-row")) return;
             var modeEl = tr.querySelector(".a03-mode");
             days.push({
               work_date: tr.dataset.workDate,
@@ -1425,10 +1457,12 @@
       }
       var days = [];
       $("e02-body").querySelectorAll("tr").forEach(function (tr) {
+        var inEl = tr.querySelector(".e02-in");
+        if (!inEl) return; // 未来日など表示のみ行は送らない
         var modeEl = tr.querySelector(".e02-mode");
         days.push({
           work_date: tr.dataset.workDate,
-          clock_in: tr.querySelector(".e02-in").value,
+          clock_in: inEl.value,
           clock_out: tr.querySelector(".e02-out").value,
           break_minutes: tr.querySelector(".e02-br").value || 0,
           day_mode: modeEl ? modeEl.value : "work"
@@ -1460,7 +1494,13 @@
     })();
   });
   $("a01-day").addEventListener("change", function () {
-    state.adminDay = $("a01-day").value;
+    var dayVal = $("a01-day").value || "";
+    // 選択月と違う日付が残っていたら捨てる
+    if (dayVal && state.adminMonth && dayVal.slice(0, 7) !== state.adminMonth) {
+      dayVal = "";
+      $("a01-day").value = "";
+    }
+    state.adminDay = dayVal;
     $("a01-kpi-detail").classList.add("is-hidden");
     withError(function () {
       return withLoading(refreshDashboard);

@@ -14,9 +14,9 @@
         <div class="app-header">
           <h1>勤怠システム（社員）</h1>
           <div class="header-links">
-            <button type="button" class="btn btn-nav" id="btn-goto-e02" data-goto="e02" disabled>月次一覧</button>
-            <button type="button" class="btn btn-nav" id="btn-emp-submit" data-action="submit" disabled>提出</button>
-            <button type="button" class="btn btn-nav" data-goto="a01">管理者</button>
+            <button type="button" class="btn btn-nav btn-tint-sky" id="btn-goto-e02" data-goto="e02" disabled>月次一覧</button>
+            <button type="button" class="btn btn-nav btn-tint-mint" id="btn-emp-submit" data-action="submit" disabled>提出</button>
+            <button type="button" class="btn btn-nav btn-tint-lavender" data-goto="a01">管理者</button>
           </div>
         </div>
 
@@ -24,9 +24,9 @@
           <label class="field-label" for="emp-id">社員番号</label>
           <div class="row">
             <input id="emp-id" class="input" type="text" maxlength="4" inputmode="numeric" value="" placeholder="4桁" autocomplete="off" />
-            <button type="button" class="btn btn-secondary" id="btn-emp-confirm">確認</button>
+            <button type="button" class="btn btn-secondary btn-tint-peach" id="btn-emp-confirm">確認</button>
           </div>
-          <p class="identity" id="e01-identity">氏名：—　番号：—</p>
+          <p class="identity" id="e01-identity">氏名：—　社員番号：—</p>
         </div>
 
         <div class="card">
@@ -51,13 +51,13 @@
         <div class="app-header">
           <h1 id="e02-title">月次一覧</h1>
           <div class="header-links">
-            <button type="button" class="btn btn-tiny" id="e02-prev">前月</button>
-            <button type="button" class="btn btn-tiny" id="e02-next">翌月</button>
+            <button type="button" class="btn btn-tiny btn-tint-sand" id="e02-prev">前月</button>
+            <button type="button" class="btn btn-tiny btn-tint-sky" id="e02-next">翌月</button>
           </div>
         </div>
         <div class="meta-row">
           <p class="meta">ステータス：<span class="badge" id="e02-status">未提出</span></p>
-          <button type="button" class="btn btn-nav" data-goto="e01">打刻</button>
+          <button type="button" class="btn btn-nav btn-tint-sky" data-goto="e01">打刻</button>
         </div>
         <div id="e02-reject-note" class="alert alert-danger is-hidden" role="status"></div>
         <div class="table-wrap">
@@ -69,7 +69,7 @@
           </table>
         </div>
         <div id="e02-edit-block" class="a03-actions-block is-hidden">
-          <label class="field-label" for="e02-reason">修正理由（一括）</label>
+          <label class="field-label" for="e02-reason">修正理由（複数の日付・項目を直しても、修正理由は1つでまとめて保存されます。）</label>
           <select id="e02-reason" class="input" required>
             <option value="">理由を選択（必須）</option>
             <option value="打刻忘れ">打刻忘れ</option>
@@ -79,9 +79,8 @@
             <option value="休日出勤の登録">休日出勤の登録</option>
             <option value="差戻し指摘への対応">差戻し指摘への対応</option>
           </select>
-          <p class="hint">複数の日付・項目を直しても、修正理由は1つでまとめて保存されます。</p>
           <div class="action-row action-row-full a03-actions">
-            <button type="button" class="btn btn-secondary" id="btn-e02-save">修正して保存</button>
+            <button type="button" class="btn btn-secondary btn-tint-lavender" id="btn-e02-save">修正して保存</button>
           </div>
         </div>
       </div>
@@ -93,7 +92,7 @@
         <div class="app-header">
           <h1>勤怠状況一覧</h1>
           <div class="header-links">
-            <button type="button" class="btn btn-nav" data-goto="e01">打刻</button>
+            <button type="button" class="btn btn-nav btn-tint-sky" data-goto="e01">打刻</button>
           </div>
         </div>
         <div class="month-filters">
@@ -111,6 +110,10 @@
             <span class="kpi-label">未提出</span>
             <span class="kpi-value" id="kpi-unsubmitted">—</span>
           </button>
+          <button type="button" class="kpi kpi-click" data-kpi="submitted">
+            <span class="kpi-label">提出済み</span>
+            <span class="kpi-value" id="kpi-submitted">—</span>
+          </button>
           <button type="button" class="kpi kpi-click" data-kpi="pending">
             <span class="kpi-label">承認待ち</span>
             <span class="kpi-value" id="kpi-pending">—</span>
@@ -127,14 +130,14 @@
         <div id="a01-kpi-detail" class="kpi-detail is-hidden" aria-live="polite">
           <div class="kpi-detail-head">
             <h2 class="kpi-detail-title" id="a01-kpi-detail-title">—</h2>
-            <button type="button" class="btn btn-nav" id="a01-kpi-detail-close">閉じる</button>
+            <button type="button" class="btn btn-nav btn-tint-mist" id="a01-kpi-detail-close">閉じる</button>
           </div>
           <ul class="kpi-detail-list" id="a01-kpi-detail-list"></ul>
         </div>
         <div class="action-row action-row-full">
-          <button type="button" class="btn btn-nav" data-goto="a05">アカウント管理</button>
-          <button type="button" class="btn btn-nav" data-goto="a04">変更履歴</button>
-          <button type="button" class="btn btn-secondary" id="btn-csv">CSV出力</button>
+          <button type="button" class="btn btn-nav btn-tint-sky" data-goto="a05">アカウント管理</button>
+          <button type="button" class="btn btn-nav btn-tint-lavender" data-goto="a04">変更履歴</button>
+          <button type="button" class="btn btn-secondary btn-tint-peach" id="btn-csv">CSV出力</button>
         </div>
       </div>
     </section>
@@ -144,7 +147,7 @@
       <div class="phone phone-wide a03-sheet">
         <div class="app-header a03-top">
           <h1>勤怠詳細</h1>
-          <button type="button" class="btn btn-nav a03-back" data-goto="a05">アカウント管理</button>
+          <button type="button" class="btn btn-nav btn-tint-sky a03-back" data-goto="a05">アカウント管理</button>
         </div>
 
         <div class="a03-meta-row">
@@ -161,6 +164,10 @@
           <div class="a03-summary-item">
             <span class="a03-summary-label">残業時間</span>
             <span class="a03-summary-value" id="a03-ot">—<span class="a03-unit">h</span></span>
+          </div>
+          <div class="a03-summary-item">
+            <span class="a03-summary-label">法定休日出勤時間</span>
+            <span class="a03-summary-value" id="a03-holiday-work">—<span class="a03-unit">h</span></span>
           </div>
         </div>
 
@@ -200,9 +207,9 @@
             placeholder="差戻し時のみ入力（必須）"
           />
           <div class="action-row action-row-full a03-actions">
-            <button type="button" class="btn btn-ok" data-action="a03-approve">承認</button>
+            <button type="button" class="btn btn-ok btn-tint-mint" data-action="a03-approve">承認</button>
             <button type="button" class="btn btn-warn" data-action="a03-reject">差戻し</button>
-            <button type="button" class="btn btn-secondary" data-action="a03-save">修正して保存</button>
+            <button type="button" class="btn btn-secondary btn-tint-lavender" data-action="a03-save">修正して保存</button>
           </div>
         </div>
       </div>
@@ -213,7 +220,7 @@
       <div class="phone phone-wide a04-sheet">
         <div class="app-header a04-toolbar">
           <h1>全体の変更履歴</h1>
-          <button type="button" class="btn btn-nav" data-goto="a01">勤怠状況一覧</button>
+          <button type="button" class="btn btn-nav btn-tint-sky" data-goto="a01">勤怠状況一覧</button>
         </div>
 
         <div class="a04-search-row">
@@ -227,13 +234,13 @@
           <table class="a04-table">
             <thead>
               <tr>
-                <th>日付</th>
-                <th>変更者</th>
-                <th>対象従業員</th>
+                <th class="a04-emphasis">日付</th>
+                <th class="a04-emphasis">変更者</th>
+                <th class="a04-emphasis">対象従業員</th>
+                <th class="a04-emphasis">理由／ステータス</th>
                 <th>変更項目</th>
                 <th>旧データ</th>
                 <th>新データ</th>
-                <th>理由／ステータス</th>
               </tr>
             </thead>
             <tbody id="a04-body"></tbody>
@@ -247,14 +254,14 @@
       <div class="phone phone-wide">
         <div class="app-header">
           <h1>アカウント管理</h1>
-          <button type="button" class="btn btn-nav" data-goto="a01">勤怠状況一覧</button>
+          <button type="button" class="btn btn-nav btn-tint-sky" data-goto="a01">勤怠状況一覧</button>
         </div>
         <div class="card">
           <label class="field-label" for="new-emp-no">新入社員の追加</label>
           <div class="row">
             <input id="new-emp-no" class="input" type="text" maxlength="4" placeholder="社員番号" />
             <input id="new-emp-name" class="input" type="text" placeholder="氏名" />
-            <button type="button" class="btn btn-primary" id="btn-add-emp">追加</button>
+            <button type="button" class="btn btn-primary btn-tint-mint" id="btn-add-emp">追加</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -276,8 +283,8 @@
       <p class="meta" id="submit-status-line">現在ステータス：未提出</p>
       <p class="hint" id="submit-hint"></p>
       <div class="action-row modal-actions">
-        <button type="button" class="btn btn-secondary" data-action="close-modal">閉じる</button>
-        <button type="button" class="btn btn-primary" id="btn-do-submit" disabled>提出する</button>
+        <button type="button" class="btn btn-secondary btn-tint-mist" data-action="close-modal">閉じる</button>
+        <button type="button" class="btn btn-primary btn-tint-mint" id="btn-do-submit" disabled>提出する</button>
       </div>
     </div>
   </div>
@@ -298,8 +305,8 @@
         <button type="button" class="btn btn-warn mb" id="btn-reset">リセットする</button>
       </details>
       <div class="action-row modal-actions">
-        <button type="button" class="btn btn-secondary" data-action="close-admin-modal">閉じる</button>
-        <button type="button" class="btn btn-primary" id="btn-admin-login">入る</button>
+        <button type="button" class="btn btn-secondary btn-tint-mist" data-action="close-admin-modal">閉じる</button>
+        <button type="button" class="btn btn-primary btn-tint-lavender" id="btn-admin-login">入る</button>
       </div>
     </div>
   </div>
