@@ -646,6 +646,18 @@ select {
   font-weight: 700;
 }
 
+#e02-table th,
+#e02-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#e02-table .e02-mode {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
 .data-table th {
   background: #e8eef5;
   font-weight: 800;
