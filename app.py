@@ -847,6 +847,11 @@ def submit_check(emp):
         messages.append("すでに提出済みです")
     if sub["status"] == "承認済み":
         messages.append("すでに承認済みです")
+    reject_reason = (sub.get("reject_reason") or "").strip()
+    if reject_reason and sub["status"] in ("未提出", "差戻し"):
+        messages.append(
+            f"差戻しされました。修正のうえ再度提出してください（理由：{reject_reason}）"
+        )
     return json_ok(
         {
             "month": ym,

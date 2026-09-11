@@ -415,6 +415,21 @@
     var editable =
       data.submission.status === "未提出" || data.submission.status === "差戻し";
     $("e02-edit-block").classList.toggle("is-hidden", !editable);
+    var rejectNote = $("e02-reject-note");
+    var rejectReason = (data.submission.reject_reason || "").trim();
+    if (
+      rejectNote &&
+      rejectReason &&
+      (data.submission.status === "未提出" || data.submission.status === "差戻し")
+    ) {
+      rejectNote.textContent =
+        "差戻しされました。内容を直して再度「提出」してください。理由：" +
+        rejectReason;
+      rejectNote.classList.remove("is-hidden");
+    } else if (rejectNote) {
+      rejectNote.textContent = "";
+      rejectNote.classList.add("is-hidden");
+    }
     body.innerHTML = "";
     if (!data.days || data.days.length === 0) {
       body.innerHTML =
@@ -1305,9 +1320,15 @@
               })
             });
             await refreshDetail(state.detailEmp);
+            // 承認待ちから外し、未提出カウントへ反映
+            await refreshDashboard();
           }, "差戻しています");
           reasonReject.value = "";
-          alert("1ヶ月分を差戻しました");
+          var kpiDetail = $("a01-kpi-detail");
+          if (kpiDetail) kpiDetail.classList.add("is-hidden");
+          alert(
+            "差戻しました。ステータスは未提出になり、承認待ちから外れます。社員に再度提出してもらってください。"
+          );
         }
         if (action === "a03-save") {
           var reasonSave = $("a03-reason");
