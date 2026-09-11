@@ -823,6 +823,21 @@ select {
   min-width: 0;
 }
 
+/* KPI詳細の社員名ボタン：白黒 */
+.btn.kpi-emp-link,
+.btn.kpi-emp-link:hover,
+.btn.kpi-emp-link:focus,
+.btn.kpi-emp-link:active,
+.btn.kpi-emp-link:disabled,
+.btn.btn-nav.kpi-emp-link,
+.btn.btn-nav.kpi-emp-link:hover,
+.btn.btn-nav.kpi-emp-link:focus,
+.btn.btn-nav.kpi-emp-link:active {
+  background: #ffffff;
+  border-color: #1a2330;
+  color: #1a2330;
+}
+
 .action-row {
   display: flex;
   flex-wrap: wrap;

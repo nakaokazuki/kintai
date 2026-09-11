@@ -785,7 +785,7 @@
         var li = document.createElement("li");
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "btn btn-nav btn-tint-sky kpi-emp-link";
+        btn.className = "btn btn-nav kpi-emp-link";
         btn.textContent = e.name + "（" + e.emp_no + "）";
         btn.addEventListener("click", function () {
           state.detailEmp = e.emp_no;
