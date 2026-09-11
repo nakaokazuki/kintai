@@ -971,7 +971,8 @@ def admin_dashboard():
     sub_map = {s["emp_no"]: s["status"] for s in subs}
     for emp in employees:
         status = sub_map.get(emp["emp_no"], "未提出")
-        if status == "未提出":
+        # 差戻し後は未提出扱い（旧データの「差戻し」ステータスも未提出カウントに含める）
+        if status in ("未提出", "差戻し"):
             unsubmitted_list.append(emp_label(emp))
         elif status == "提出済み":
             pending_list.append(emp_label(emp))
@@ -1212,11 +1213,12 @@ def admin_reject():
         return json_err("提出済みの月のみ差戻しできます")
     now = now_tokyo().isoformat(timespec="seconds")
     db.execute(
-        """UPDATE monthly_submissions SET status='差戻し', reviewed_at=?, reject_reason=?
+        """UPDATE monthly_submissions
+           SET status='未提出', submitted_at=NULL, reviewed_at=?, reject_reason=?
            WHERE emp_no=? AND year_month=?""",
         (now, reason, emp_no, ym),
     )
-    add_log("管理者", emp_no, None, "差戻し", sub["status"], "差戻し", reason)
+    add_log("管理者", emp_no, None, "差戻し", sub["status"], "未提出", reason)
     return json_ok({"submission": get_or_create_submission(emp_no, ym)})
 
 

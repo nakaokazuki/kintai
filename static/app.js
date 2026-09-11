@@ -312,8 +312,8 @@
     if (id === "a04") {
       withError(function () {
         return withLoading(function () {
-          return refreshLogs({ searching: false });
-        }, "検索しています");
+          return refreshLogs();
+        }, "変更履歴を読み込んでいます");
       })();
     }
     if (id === "a05") {
@@ -818,13 +818,8 @@
 
   async function refreshLogs(opts) {
     opts = opts || {};
-    var searching = !!opts.searching;
     var seq = ++logsSearchSeq;
     var body = $("a04-body");
-    if (searching) {
-      body.innerHTML =
-        '<tr><td colspan="7">検索しています</td></tr>';
-    }
     var q =
       "/api/admin/logs?date=" +
       encodeURIComponent($("a04-date").value || "") +
@@ -870,7 +865,9 @@
     logsSearchTimer = setTimeout(function () {
       logsSearchTimer = null;
       withError(function () {
-        return refreshLogs({ searching: true });
+        return withLoading(function () {
+          return refreshLogs();
+        }, "検索しています");
       })();
     }, 250);
   }
