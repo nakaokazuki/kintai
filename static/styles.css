@@ -157,6 +157,39 @@ select {
   cursor: not-allowed;
 }
 
+/* 勤怠システム（社員）画面：白背景の白黒ボタン */
+#e01 .btn,
+#e01 .btn:hover,
+#e01 .btn:focus,
+#e01 .btn:active,
+#e01 .btn:disabled,
+#e01 .btn.btn-nav,
+#e01 .btn.btn-in,
+#e01 .btn.btn-break,
+#e01 .btn.btn-out,
+#e01 .btn.btn-secondary,
+#e01 .btn.btn-tint-sky,
+#e01 .btn.btn-tint-mint,
+#e01 .btn.btn-tint-lavender,
+#e01 .btn.btn-tint-peach,
+#e01 .btn.btn-tint-sand,
+#e01 .btn.btn-tint-mist,
+#e01 .btn.btn-tint-teal,
+#e01 .btn.btn-tint-orange,
+#e01 .btn.btn-tint-indigo,
+#e01 .btn.btn-tint-cyan {
+  background: #ffffff;
+  border-color: #1a2330;
+  color: #1a2330;
+}
+
+#e01 .btn:disabled {
+  opacity: 0.45;
+  background: #ffffff;
+  border-color: #1a2330;
+  color: #1a2330;
+}
+
 .linkish {
   background: none;
   border: none;
@@ -522,6 +555,37 @@ select {
   color: #3a424c;
 }
 
+/* 管理画面アクション用（他で未使用） */
+.btn.btn-tint-orange,
+.btn.btn-tint-orange:hover,
+.btn.btn-tint-orange:focus,
+.btn.btn-tint-orange:active,
+.btn.btn-tint-orange:disabled {
+  background: #ffe0b8;
+  border-color: #d4924a;
+  color: #6a4010;
+}
+
+.btn.btn-tint-indigo,
+.btn.btn-tint-indigo:hover,
+.btn.btn-tint-indigo:focus,
+.btn.btn-tint-indigo:active,
+.btn.btn-tint-indigo:disabled {
+  background: #d6dcf8;
+  border-color: #6b7fd4;
+  color: #2a3568;
+}
+
+.btn.btn-tint-cyan,
+.btn.btn-tint-cyan:hover,
+.btn.btn-tint-cyan:focus,
+.btn.btn-tint-cyan:active,
+.btn.btn-tint-cyan:disabled {
+  background: #c8f0f8;
+  border-color: #4a9eb0;
+  color: #1a5560;
+}
+
 .btn-block {
   width: 100%;
   min-height: 60px;
@@ -820,9 +884,9 @@ select {
 #a01 .action-row-full .btn-secondary:hover,
 #a01 .action-row-full .btn-secondary:focus,
 #a01 .action-row-full .btn-secondary:active {
-  background: #ffd0bc;
-  border-color: #c07860;
-  color: #6a2e20;
+  background: #c8f0f8;
+  border-color: #4a9eb0;
+  color: #1a5560;
 }
 
 .action-stack .btn {
