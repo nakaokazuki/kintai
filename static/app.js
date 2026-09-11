@@ -3,6 +3,7 @@
     role: null,
     emp: null,
     today: null,
+    rejectNotices: [],
     empMonth: null,
     adminMonth: null,
     adminDay: null,
@@ -229,6 +230,7 @@
   function resetEmployeeUi() {
     state.emp = null;
     state.today = null;
+    state.rejectNotices = [];
     if (state.role === "employee") state.role = null;
     $("e01-identity").textContent = "氏名：—　番号：—";
     $("e01-today-title").textContent = "本日";
@@ -388,11 +390,29 @@
       return;
     }
     state.today = data.today;
+    state.rejectNotices = data.reject_notices || [];
     $("e01-identity").textContent =
       "氏名：" + (emp.name || "—") + "　番号：" + (emp.emp_no || "—");
     $("e01-today-title").textContent = "本日 " + formatDisplayDate(data.server_date);
     updatePunchButtons(data.today);
     setEmployeeNavEnabled(true);
+  }
+
+  function showRejectNoticesPopup() {
+    var notices = state.rejectNotices || [];
+    if (!notices.length) return;
+    var lines = notices.map(function (n) {
+      return (
+        "・" +
+        monthLabel(n.month) +
+        "\n理由：" +
+        n.reason
+      );
+    });
+    alert(
+      "勤怠が差戻しされています。内容を確認・修正のうえ、再度提出してください。\n\n" +
+        lines.join("\n\n")
+    );
   }
 
   async function refreshEmpMonth() {
@@ -1032,6 +1052,7 @@
         if (!ok) {
           throw new Error("ログインに失敗しました");
         }
+        showRejectNoticesPopup();
       } finally {
         hideLoading();
         state.empBusy = false;

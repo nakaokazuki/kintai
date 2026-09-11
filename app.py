@@ -664,6 +664,33 @@ def employee_me(emp):
     return json_ok({"emp_no": emp["emp_no"], "name": emp["name"]})
 
 
+def get_reject_notices(emp_no: str) -> list[dict]:
+    """差戻し後まだ再提出していない月の案内一覧。"""
+    rows = db.fetchall(
+        """SELECT year_month, status, reject_reason
+           FROM monthly_submissions
+           WHERE emp_no=?
+             AND status IN ('未提出', '差戻し')
+             AND reject_reason IS NOT NULL
+             AND TRIM(reject_reason) != ''
+           ORDER BY year_month DESC""",
+        (emp_no,),
+    )
+    out = []
+    for r in rows:
+        reason = (r["reject_reason"] or "").strip()
+        if not reason:
+            continue
+        out.append(
+            {
+                "month": r["year_month"],
+                "status": r["status"],
+                "reason": reason,
+            }
+        )
+    return out
+
+
 @app.get("/api/employee/today")
 @require_employee
 def employee_today(emp):
@@ -693,7 +720,12 @@ def employee_today(emp):
             ).fetchone()
         conn.commit()
     return json_ok(
-        {"today": info, "submission": db.row_to_dict(sub), "server_date": today}
+        {
+            "today": info,
+            "submission": db.row_to_dict(sub),
+            "server_date": today,
+            "reject_notices": get_reject_notices(emp["emp_no"]),
+        }
     )
 
 
