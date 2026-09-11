@@ -11,7 +11,9 @@
     dashboardScope: "month",
     detailEmp: null,
     pendingAdminScreen: null,
-    empBusy: false
+    empBusy: false,
+    submitMissingCount: 0,
+    submitStatusOk: false
   };
 
   function $(id) {
@@ -463,9 +465,10 @@
       if (d.status_kind === "break") tr.className = "row-break";
       if (d.status_kind === "holiday") tr.className = "row-holiday";
       if (d.status_kind === "leave") tr.className = "row-leave";
-      if (isFuture) tr.className = "row-future";
+      else if (isFuture) tr.className = "row-future";
       tr.dataset.workDate = d.work_date;
       tr.dataset.isHoliday = d.is_holiday ? "1" : "0";
+      tr.dataset.isFuture = isFuture ? "1" : "0";
       var statusText =
         d.status === "休憩不足"
           ? "休不足"
@@ -474,10 +477,31 @@
             : d.status === "未入力"
               ? "本日未入力"
               : d.status;
-      // 未来日は表示のみ（編集しない）
-      if (editable && !isFuture) {
+      if (editable) {
         var statusCell;
-        if (d.is_holiday) {
+        var timeDisabled = false;
+        // 未来の平日（および未来の有給）：有給をプルダウン選択可
+        if (isFuture && (!d.is_holiday || d.status_kind === "leave")) {
+          var futureMode =
+            d.day_mode === "paid_leave" || d.status_kind === "leave"
+              ? "paid_leave"
+              : "future";
+          statusCell =
+            '<select class="input e02-mode">' +
+            '<option value="future"' +
+            (futureMode === "future" ? " selected" : "") +
+            ">—</option>" +
+            '<option value="paid_leave"' +
+            (futureMode === "paid_leave" ? " selected" : "") +
+            ">有給</option>" +
+            "</select>";
+          timeDisabled = futureMode === "paid_leave";
+          if (futureMode === "paid_leave") tr.className = "row-leave";
+        } else if (isFuture && d.is_holiday) {
+          // 未来の土日祝は表示のみ
+          statusCell = statusText || "休日";
+          timeDisabled = true;
+        } else if (d.is_holiday) {
           var mode = d.day_mode === "work" ? "work" : "holiday";
           statusCell =
             '<select class="input e02-mode">' +
@@ -488,6 +512,7 @@
             (mode === "work" ? " selected" : "") +
             ">本日未入力</option>" +
             "</select>";
+          timeDisabled = mode !== "work";
         } else if (d.status_kind === "missing" || d.status_kind === "leave") {
           var leaveMode =
             d.day_mode === "paid_leave"
@@ -507,30 +532,31 @@
             (leaveMode === "absent" ? " selected" : "") +
             ">欠勤</option>" +
             "</select>";
+          timeDisabled = leaveMode === "paid_leave" || leaveMode === "absent";
         } else {
           statusCell = statusText;
+          timeDisabled =
+            d.day_mode === "paid_leave" || d.day_mode === "absent";
         }
-        var timeDisabled =
-          (d.is_holiday && d.day_mode !== "work") ||
-          d.day_mode === "paid_leave" ||
-          d.day_mode === "absent";
         tr.innerHTML =
           "<td>" +
           formatDisplayDate(d.work_date) +
           '</td><td><input class="a03-cell e02-in" value="' +
-          (d.clock_in || "") +
+          (timeDisabled ? "" : d.clock_in || "") +
           '" placeholder="—" ' +
           (timeDisabled ? "disabled " : "") +
           '/></td><td><input class="a03-cell e02-out" value="' +
-          (d.clock_out || "") +
+          (timeDisabled ? "" : d.clock_out || "") +
           '" placeholder="—" ' +
           (timeDisabled ? "disabled " : "") +
           '/></td><td><input class="a03-cell e02-br" value="' +
-          (d.clock_in || d.clock_out ? d.break_minutes : "") +
+          (timeDisabled || !(d.clock_in || d.clock_out)
+            ? ""
+            : d.break_minutes) +
           '" placeholder="—" ' +
           (timeDisabled ? "disabled " : "") +
           "/></td><td>" +
-          (d.clock_out ? d.overtime_minutes : "—") +
+          (d.clock_out && !timeDisabled ? d.overtime_minutes : "—") +
           "</td><td>" +
           statusCell +
           "</td>";
@@ -557,12 +583,27 @@
           modeSel.addEventListener("change", function () {
             var v = modeSel.value;
             var disable =
-              v === "holiday" || v === "paid_leave" || v === "absent";
+              v === "holiday" ||
+              v === "paid_leave" ||
+              v === "absent" ||
+              v === "future";
+            // 未来日の「—」は時刻入力なし。有給も時刻なし。
+            if (tr.dataset.isFuture === "1") {
+              disable = true;
+            }
             tr.classList.toggle("row-holiday", v === "holiday");
-            tr.classList.toggle("row-leave", v === "paid_leave" || v === "absent");
+            tr.classList.toggle(
+              "row-leave",
+              v === "paid_leave" || v === "absent"
+            );
             tr.classList.toggle("row-missing", v === "work");
+            tr.classList.toggle(
+              "row-future",
+              v === "future" || (tr.dataset.isFuture === "1" && v !== "paid_leave")
+            );
             ["e02-in", "e02-out", "e02-br"].forEach(function (cls) {
               var inp = tr.querySelector("." + cls);
+              if (!inp) return;
               inp.disabled = disable;
               if (disable) inp.value = "";
             });
@@ -1007,6 +1048,23 @@
     });
   }
 
+  function syncSubmitButton() {
+    var btn = $("btn-do-submit");
+    var resign = $("submit-resign");
+    var missing = state.submitMissingCount || 0;
+    var statusOk = !!state.submitStatusOk;
+    var resignOn = !!(resign && resign.checked);
+    var can = statusOk && (missing === 0 || resignOn);
+    btn.disabled = !can;
+    if (can && resignOn && missing > 0) {
+      btn.textContent = "提出する（退職）";
+    } else if (can) {
+      btn.textContent = "提出する";
+    } else {
+      btn.textContent = "提出する（未入力あり）";
+    }
+  }
+
   async function openSubmitModal() {
     var data;
     try {
@@ -1045,16 +1103,30 @@
     $("submit-hint").textContent =
       data.messages.join("。") ||
       (data.can_submit ? "問題なければ提出してください。" : "");
-    var btn = $("btn-do-submit");
-    btn.disabled = !data.can_submit;
-    btn.textContent = data.can_submit
-      ? "提出する"
-      : "提出する（未入力あり）";
+
+    state.submitMissingCount = data.missing_count || 0;
+    state.submitStatusOk =
+      data.submission.status === "未提出" || data.submission.status === "差戻し";
+
+    var resign = $("submit-resign");
+    var resignWrap = $("submit-resign-wrap");
+    resign.checked = false;
+    // 未入力があるときだけ退職提出チェックを表示
+    if (state.submitMissingCount > 0 && state.submitStatusOk) {
+      resignWrap.classList.remove("is-hidden");
+    } else {
+      resignWrap.classList.add("is-hidden");
+    }
+    syncSubmitButton();
     $("submit-modal").classList.remove("is-hidden");
   }
 
   function closeSubmitModal() {
     $("submit-modal").classList.add("is-hidden");
+    var resign = $("submit-resign");
+    if (resign) resign.checked = false;
+    var resignWrap = $("submit-resign-wrap");
+    if (resignWrap) resignWrap.classList.add("is-hidden");
   }
 
   function openAdminModal() {
@@ -1422,10 +1494,19 @@
   $("btn-do-submit").addEventListener(
     "click",
     withError(async function () {
+      var resign = $("submit-resign");
+      var resignOn = !!(
+        resign &&
+        resign.checked &&
+        (state.submitMissingCount || 0) > 0
+      );
       await withLoading(async function () {
         await api("/api/employee/submit", {
           method: "POST",
-          body: JSON.stringify({ month: state.empMonth || currentMonthKey() })
+          body: JSON.stringify({
+            month: state.empMonth || currentMonthKey(),
+            resign_submit: resignOn
+          })
         });
       }, "提出しています");
       closeSubmitModal();
@@ -1433,6 +1514,16 @@
       await withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
     })
   );
+
+  $("submit-resign").addEventListener("change", function () {
+    var resign = $("submit-resign");
+    if (resign.checked) {
+      if (!confirm("チェックを入れますか？")) {
+        resign.checked = false;
+      }
+    }
+    syncSubmitButton();
+  });
 
   $("e02-prev").addEventListener("click", function () {
     state.empMonth = shiftMonth(state.empMonth || currentMonthKey(), -1);
@@ -1457,15 +1548,24 @@
       }
       var days = [];
       $("e02-body").querySelectorAll("tr").forEach(function (tr) {
-        var inEl = tr.querySelector(".e02-in");
-        if (!inEl) return; // 未来日など表示のみ行は送らない
         var modeEl = tr.querySelector(".e02-mode");
+        var inEl = tr.querySelector(".e02-in");
+        // プルダウンまたは入力がある行のみ（未来の有給設定を含む）
+        if (!modeEl && !inEl) return;
         days.push({
           work_date: tr.dataset.workDate,
-          clock_in: inEl.value,
-          clock_out: tr.querySelector(".e02-out").value,
-          break_minutes: tr.querySelector(".e02-br").value || 0,
-          day_mode: modeEl ? modeEl.value : "work"
+          clock_in: inEl ? inEl.value : "",
+          clock_out: tr.querySelector(".e02-out")
+            ? tr.querySelector(".e02-out").value
+            : "",
+          break_minutes: tr.querySelector(".e02-br")
+            ? tr.querySelector(".e02-br").value || 0
+            : 0,
+          day_mode: modeEl
+            ? modeEl.value
+            : tr.dataset.isFuture === "1"
+              ? "future"
+              : "work"
         });
       });
       await withLoading(async function () {

@@ -353,7 +353,7 @@ def apply_day_edits(
                 new_in = None
                 new_out = None
                 new_br = 0
-            elif day_mode in ("work", "missing", ""):
+            elif day_mode in ("work", "missing", "", "future"):
                 new_leave = ""
 
         for field, old, new in (
@@ -925,12 +925,12 @@ def submit_check(emp):
 @app.post("/api/employee/submit")
 @require_employee
 def employee_submit(emp):
-    ym = (request.json or {}).get("month") or month_key(
-        today_tokyo().year, today_tokyo().month
-    )
+    body = request.json or {}
+    ym = body.get("month") or month_key(today_tokyo().year, today_tokyo().month)
+    resign_submit = bool(body.get("resign_submit"))
     year, month = parse_month_key(ym)
     missing, break_short, _ = missing_and_break_counts(emp["emp_no"], year, month)
-    if missing > 0:
+    if missing > 0 and not resign_submit:
         return json_err(f"未入力が{missing}件あるため提出できません")
     sub = get_or_create_submission(emp["emp_no"], ym)
     if sub["status"] not in ("未提出", "差戻し"):
@@ -942,11 +942,21 @@ def employee_submit(emp):
            WHERE emp_no=? AND year_month=?""",
         (now, emp["emp_no"], ym),
     )
-    add_log(emp["emp_no"], emp["emp_no"], None, "月次提出", sub["status"], "提出済み", "")
+    reason = "退職するため提出" if resign_submit and missing > 0 else ""
+    add_log(
+        emp["emp_no"],
+        emp["emp_no"],
+        None,
+        "月次提出",
+        sub["status"],
+        "提出済み",
+        reason,
+    )
     return json_ok(
         {
             "submission": get_or_create_submission(emp["emp_no"], ym),
             "break_short_count": break_short,
+            "resign_submit": bool(resign_submit and missing > 0),
         }
     )
 
