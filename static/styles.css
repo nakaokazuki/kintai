@@ -389,9 +389,9 @@ select {
 .btn.btn-in:focus,
 .btn.btn-in:active,
 .btn.btn-in:disabled {
-  background: #f0c4c4;
-  border-color: #c07070;
-  color: #6a2828;
+  background: #d5efde;
+  border-color: #7bbb90;
+  color: #1a5c38;
 }
 
 .btn-out,

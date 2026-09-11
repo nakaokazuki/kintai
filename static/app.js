@@ -984,7 +984,7 @@
       var tdName = document.createElement("td");
       var nameBtn = document.createElement("button");
       nameBtn.type = "button";
-      nameBtn.className = "btn btn-nav btn-tint-sky emp-name-link";
+      nameBtn.className = "btn btn-nav btn-tint-mist emp-name-link";
       nameBtn.textContent = e.name;
       nameBtn.addEventListener("click", function () {
         state.detailEmp = e.emp_no;
