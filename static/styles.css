@@ -369,25 +369,40 @@ select {
 .btn-break,
 .btn-break:hover,
 .btn-break:focus,
-.btn-break:active {
-  background: #c5ddf2;
-  border-color: #6a98c4;
-  color: #1a4068;
+.btn-break:active,
+.btn.btn-break,
+.btn.btn-break:hover,
+.btn.btn-break:focus,
+.btn.btn-break:active,
+.btn.btn-break:disabled {
+  background: #fce4ec;
+  border-color: #e8a0b4;
+  color: #8a3a52;
 }
 
 .btn-in,
 .btn-in:hover,
 .btn-in:focus,
-.btn-in:active {
-  background: #c2e6d0;
-  border-color: #5aa878;
-  color: #145230;
+.btn-in:active,
+.btn.btn-in,
+.btn.btn-in:hover,
+.btn.btn-in:focus,
+.btn.btn-in:active,
+.btn.btn-in:disabled {
+  background: #f0c4c4;
+  border-color: #c07070;
+  color: #6a2828;
 }
 
 .btn-out,
 .btn-out:hover,
 .btn-out:focus,
-.btn-out:active {
+.btn-out:active,
+.btn.btn-out,
+.btn.btn-out:hover,
+.btn.btn-out:focus,
+.btn.btn-out:active,
+.btn.btn-out:disabled {
   background: #f0c4c4;
   border-color: #c07070;
   color: #6a2828;
@@ -456,6 +471,17 @@ select {
   color: #145230;
 }
 
+/* 提出専用：他ボタンで未使用の青緑 */
+.btn.btn-tint-teal,
+.btn.btn-tint-teal:hover,
+.btn.btn-tint-teal:focus,
+.btn.btn-tint-teal:active,
+.btn.btn-tint-teal:disabled {
+  background: #c5ebe6;
+  border-color: #5aaba0;
+  color: #1a5c55;
+}
+
 .btn.btn-tint-lavender,
 .btn.btn-tint-lavender:hover,
 .btn.btn-tint-lavender:focus,
@@ -491,9 +517,9 @@ select {
 .btn.btn-tint-mist:focus,
 .btn.btn-tint-mist:active,
 .btn.btn-tint-mist:disabled {
-  background: #d4dde6;
-  border-color: #8496a8;
-  color: #2a3848;
+  background: #c8cdd3;
+  border-color: #8a929c;
+  color: #3a424c;
 }
 
 .btn-block {

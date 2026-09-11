@@ -14,8 +14,8 @@
         <div class="app-header">
           <h1>勤怠システム（社員）</h1>
           <div class="header-links">
-            <button type="button" class="btn btn-nav btn-tint-sky" id="btn-goto-e02" data-goto="e02" disabled>月次一覧</button>
-            <button type="button" class="btn btn-nav btn-tint-mint" id="btn-emp-submit" data-action="submit" disabled>提出</button>
+            <button type="button" class="btn btn-nav btn-tint-mist" id="btn-goto-e02" data-goto="e02" disabled>月次一覧</button>
+            <button type="button" class="btn btn-nav btn-tint-teal" id="btn-emp-submit" data-action="submit" disabled>提出</button>
             <button type="button" class="btn btn-nav btn-tint-lavender" data-goto="a01">管理者</button>
           </div>
         </div>
@@ -24,7 +24,7 @@
           <label class="field-label" for="emp-id">社員番号</label>
           <div class="row">
             <input id="emp-id" class="input" type="text" maxlength="4" inputmode="numeric" value="" placeholder="4桁" autocomplete="off" />
-            <button type="button" class="btn btn-secondary btn-tint-peach" id="btn-emp-confirm">確認</button>
+            <button type="button" class="btn btn-secondary btn-tint-mist" id="btn-emp-confirm">確認</button>
           </div>
           <p class="identity" id="e01-identity">氏名：—　社員番号：—</p>
         </div>
@@ -51,13 +51,13 @@
         <div class="app-header">
           <h1 id="e02-title">月次一覧</h1>
           <div class="header-links">
-            <button type="button" class="btn btn-tiny btn-tint-sand" id="e02-prev">前月</button>
-            <button type="button" class="btn btn-tiny btn-tint-sky" id="e02-next">翌月</button>
+            <button type="button" class="btn btn-tiny btn-tint-mist" id="e02-prev">前月</button>
+            <button type="button" class="btn btn-tiny btn-tint-mist" id="e02-next">翌月</button>
           </div>
         </div>
         <div class="meta-row">
           <p class="meta">ステータス：<span class="badge" id="e02-status">未提出</span></p>
-          <button type="button" class="btn btn-nav btn-tint-sky" data-goto="e01">打刻</button>
+          <button type="button" class="btn btn-nav btn-tint-mist" data-goto="e01">打刻</button>
         </div>
         <div id="e02-reject-note" class="alert alert-danger is-hidden" role="status"></div>
         <div class="table-wrap">

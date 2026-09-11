@@ -330,37 +330,31 @@
   function updatePunchButtons(today) {
     var work = $("btn-work");
     var br = $("btn-break");
+    // 色は常時固定（状態で btn-out / btn-secondary に切り替えない）
+    work.className = "btn btn-punch btn-in";
+    br.className = "btn btn-punch btn-break";
     if (!today) {
+      work.textContent = "出勤";
+      br.textContent = "休憩開始";
       work.disabled = true;
       br.disabled = true;
       return;
     }
     if (!today.clock_in) {
       work.textContent = "出勤";
-      work.className = "btn btn-punch btn-in";
       work.disabled = false;
       br.disabled = true;
       br.textContent = "休憩開始";
-      br.className = "btn btn-punch btn-secondary";
     } else if (!today.clock_out) {
       work.textContent = "退勤";
-      work.className = "btn btn-punch btn-out";
       work.disabled = false;
       br.disabled = false;
-      if (today.on_break) {
-        br.textContent = "休憩終了";
-        br.className = "btn btn-punch btn-out";
-      } else {
-        br.textContent = "休憩開始";
-        br.className = "btn btn-punch btn-break";
-      }
+      br.textContent = today.on_break ? "休憩終了" : "休憩開始";
     } else {
       work.textContent = "退勤済";
-      work.className = "btn btn-punch btn-secondary";
       work.disabled = true;
       br.disabled = true;
       br.textContent = "休憩開始";
-      br.className = "btn btn-punch btn-secondary";
     }
 
     var breakAlert = $("alert-break");
