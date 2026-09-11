@@ -141,7 +141,7 @@ select {
   margin-bottom: 12px;
 }
 
-/* 画面遷移用：押し間違い防止のため大きめ（見た目はCSV出力と同じ塗りつぶし） */
+/* 画面遷移用：押し間違い防止のため大きめ（色は後段の .btn.btn-tint-* で指定） */
 .btn-nav {
   min-height: 52px;
   min-width: 7.5em;
@@ -149,70 +149,12 @@ select {
   font-size: 1.1rem;
   font-weight: 800;
   line-height: 1.2;
-  background: #c5ddf2;
-  border: 1px solid #6a98c4;
-  color: #1a4068;
   border-radius: 8px;
 }
 
 /* 無効でも色は残す（グレーに戻さない） */
 .btn-nav:disabled {
   cursor: not-allowed;
-}
-
-/* 役割色：CSV出力と同じ「塗り＋同系枠＋文字色」／ホバーで変えない */
-.btn-tint-sky,
-.btn-tint-sky:hover,
-.btn-tint-sky:focus,
-.btn-tint-sky:active {
-  background: #c5ddf2;
-  border-color: #6a98c4;
-  color: #1a4068;
-}
-
-.btn-tint-mint,
-.btn-tint-mint:hover,
-.btn-tint-mint:focus,
-.btn-tint-mint:active {
-  background: #c2e6d0;
-  border-color: #5aa878;
-  color: #145230;
-}
-
-.btn-tint-lavender,
-.btn-tint-lavender:hover,
-.btn-tint-lavender:focus,
-.btn-tint-lavender:active {
-  background: #d8c8ea;
-  border-color: #9278b8;
-  color: #3d2a5c;
-}
-
-.btn-tint-peach,
-.btn-tint-peach:hover,
-.btn-tint-peach:focus,
-.btn-tint-peach:active {
-  background: #ffd0bc;
-  border-color: #c07860;
-  color: #6a2e20;
-}
-
-.btn-tint-sand,
-.btn-tint-sand:hover,
-.btn-tint-sand:focus,
-.btn-tint-sand:active {
-  background: #ead9a8;
-  border-color: #b09050;
-  color: #4a3818;
-}
-
-.btn-tint-mist,
-.btn-tint-mist:hover,
-.btn-tint-mist:focus,
-.btn-tint-mist:active {
-  background: #d4dde6;
-  border-color: #8496a8;
-  color: #2a3848;
 }
 
 .linkish {
@@ -485,6 +427,73 @@ select {
   background: #ffe08a;
   border-color: #d4a820;
   color: #6a4a00;
+}
+
+/* 役割色：.btn より後＆詳細度を上げて、通常時から色分けを効かせる */
+.btn.btn-nav {
+  background: #c5ddf2;
+  border: 1px solid #6a98c4;
+  color: #1a4068;
+}
+
+.btn.btn-tint-sky,
+.btn.btn-tint-sky:hover,
+.btn.btn-tint-sky:focus,
+.btn.btn-tint-sky:active,
+.btn.btn-tint-sky:disabled {
+  background: #c5ddf2;
+  border-color: #6a98c4;
+  color: #1a4068;
+}
+
+.btn.btn-tint-mint,
+.btn.btn-tint-mint:hover,
+.btn.btn-tint-mint:focus,
+.btn.btn-tint-mint:active,
+.btn.btn-tint-mint:disabled {
+  background: #c2e6d0;
+  border-color: #5aa878;
+  color: #145230;
+}
+
+.btn.btn-tint-lavender,
+.btn.btn-tint-lavender:hover,
+.btn.btn-tint-lavender:focus,
+.btn.btn-tint-lavender:active,
+.btn.btn-tint-lavender:disabled {
+  background: #d8c8ea;
+  border-color: #9278b8;
+  color: #3d2a5c;
+}
+
+.btn.btn-tint-peach,
+.btn.btn-tint-peach:hover,
+.btn.btn-tint-peach:focus,
+.btn.btn-tint-peach:active,
+.btn.btn-tint-peach:disabled {
+  background: #ffd0bc;
+  border-color: #c07860;
+  color: #6a2e20;
+}
+
+.btn.btn-tint-sand,
+.btn.btn-tint-sand:hover,
+.btn.btn-tint-sand:focus,
+.btn.btn-tint-sand:active,
+.btn.btn-tint-sand:disabled {
+  background: #ead9a8;
+  border-color: #b09050;
+  color: #4a3818;
+}
+
+.btn.btn-tint-mist,
+.btn.btn-tint-mist:hover,
+.btn.btn-tint-mist:focus,
+.btn.btn-tint-mist:active,
+.btn.btn-tint-mist:disabled {
+  background: #d4dde6;
+  border-color: #8496a8;
+  color: #2a3848;
 }
 
 .btn-block {
