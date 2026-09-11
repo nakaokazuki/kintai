@@ -991,11 +991,7 @@ def admin_dashboard():
         date_out = ""
 
     # 対象期間の勤怠を一括取得（社員×日の個別クエリをやめて高速化）
-    with db.get_conn() as conn:
-        for emp in employees:
-            fill_empty_business_days(conn, emp["emp_no"], range_start, range_end)
-        conn.commit()
-
+    # 埋戻し(fill)はダッシュボードでは行わない（毎回だと Neon 等でタイムアウト→通信エラーになる）
     att_rows = db.fetchall(
         """SELECT emp_no, work_date, clock_in, clock_out, break_minutes, on_break, force_work, leave_type
            FROM attendance_days
@@ -1020,6 +1016,18 @@ def admin_dashboard():
             row = att_map.get((emp["emp_no"], wd))
             info = summarize_day_row(row, wd)
             holiday = not is_business_day(d)
+            # 過去の未入力営業日は 0:00 埋戻し済みと同じ扱い（読み取り専用・タイムアウト防止）
+            if (
+                not holiday
+                and d < today
+                and info["status_kind"] == "missing"
+                and info.get("leave_type") not in ("有給", "欠勤")
+                and not (info.get("clock_in") or "").strip()
+                and not (info.get("clock_out") or "").strip()
+            ):
+                info["status"] = "OK"
+                info["status_kind"] = "ok"
+                info["break_short"] = False
             if info["status_kind"] == "leave":
                 pass
             elif (

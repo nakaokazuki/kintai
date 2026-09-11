@@ -125,10 +125,25 @@
       { "Content-Type": "application/json" },
       options.headers || {}
     );
-    var res = await fetch(url, options);
-    var data = await res.json().catch(function () {
-      return { ok: false, error: "通信エラー" };
-    });
+    var res;
+    try {
+      res = await fetch(url, options);
+    } catch (e) {
+      if (e && e.name === "AbortError") {
+        throw e;
+      }
+      throw new Error("通信エラー");
+    }
+    var text = await res.text();
+    var data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      if (res.status === 502 || res.status === 504 || res.status === 524) {
+        throw new Error("サーバーが混み合っています。少し待って再試行してください");
+      }
+      throw new Error("通信エラー（応答 " + res.status + "）");
+    }
     if (!data.ok) {
       throw new Error(data.error || "エラー");
     }
@@ -140,6 +155,7 @@
       try {
         await fn.apply(null, arguments);
       } catch (e) {
+        if (e && e.name === "AbortError") return;
         alert(e.message || String(e));
       }
     };
@@ -273,7 +289,11 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     if (id === "e01" && isEmployeeActive()) refreshToday();
-    if (id === "e02") refreshEmpMonth();
+    if (id === "e02") {
+      withError(function () {
+        return withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
+      })();
+    }
     if (id === "a01") {
       withError(function () {
         return withLoading(refreshDashboard);
@@ -383,7 +403,6 @@
     }
     if (!state.empMonth) state.empMonth = defaultMonthKey();
     var body = $("e02-body");
-    body.innerHTML = "<tr><td colspan=\"6\">読み込み中</td></tr>";
     try {
       var data = await api("/api/employee/month?month=" + state.empMonth);
     } catch (err) {
@@ -584,17 +603,33 @@
     state.adminDay = sel.value;
   }
 
+  var dashboardAbort = null;
+
   async function refreshDashboard() {
     if (!state.adminMonth) state.adminMonth = defaultMonthKey();
     fillMonthSelect("a01-month", state.adminMonth);
     fillDaySelect(state.adminMonth, state.adminDay);
     updateCsvButtonLabel();
-    var data = await api(
-      "/api/admin/dashboard?month=" +
-        encodeURIComponent(state.adminMonth) +
-        "&date=" +
-        encodeURIComponent(state.adminDay || "")
-    );
+    if (dashboardAbort) {
+      try {
+        dashboardAbort.abort();
+      } catch (e) {}
+    }
+    dashboardAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var signal = dashboardAbort ? dashboardAbort.signal : undefined;
+    var data;
+    try {
+      data = await api(
+        "/api/admin/dashboard?month=" +
+          encodeURIComponent(state.adminMonth) +
+          "&date=" +
+          encodeURIComponent(state.adminDay || ""),
+        signal ? { signal: signal } : {}
+      );
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      throw e;
+    }
     state.adminDay = data.date || "";
     state.dashboardScope = data.scope || "month";
     state.dashboardRangeEnd = data.range_end || monthRangeEndIso(state.adminMonth);
@@ -1324,17 +1359,21 @@
       }, "提出しています");
       closeSubmitModal();
       alert("提出しました");
-      refreshEmpMonth();
+      await withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
     })
   );
 
   $("e02-prev").addEventListener("click", function () {
     state.empMonth = shiftMonth(state.empMonth || currentMonthKey(), -1);
-    withError(refreshEmpMonth)();
+    withError(function () {
+      return withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
+    })();
   });
   $("e02-next").addEventListener("click", function () {
     state.empMonth = shiftMonth(state.empMonth || currentMonthKey(), 1);
-    withError(refreshEmpMonth)();
+    withError(function () {
+      return withLoading(refreshEmpMonth, "月次一覧を読み込んでいます");
+    })();
   });
 
   $("btn-e02-save").addEventListener(
